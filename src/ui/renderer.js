@@ -360,7 +360,9 @@
       );
     }
 
+    var savedScrollY = window.scrollY;
     historyEl.innerHTML = rows.join('');
+    window.scrollTo(0, savedScrollY);
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 
