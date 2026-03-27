@@ -109,11 +109,22 @@ button { cursor: pointer; font-family: inherit; }
   transition: all 0.2s ease;
   user-select: none;
 }
-.difficulty-card:hover,
-.difficulty-card.selected {
+.difficulty-card:hover {
   background: var(--bg-card-hover);
   border-color: var(--gold-mid);
   box-shadow: 0 0 16px rgba(226, 185, 111, 0.15);
+}
+.difficulty-card.selected {
+  background: rgba(226, 185, 111, 0.18);
+  border-color: var(--gold-light);
+  border-width: 2px;
+  box-shadow: 0 0 24px rgba(226, 185, 111, 0.4), inset 0 0 12px rgba(226, 185, 111, 0.08);
+}
+.difficulty-card.selected .stars {
+  color: var(--gold-light);
+}
+.difficulty-card.selected .label {
+  color: var(--gold-light);
 }
 .difficulty-card .stars {
   color: var(--gold-mid);
