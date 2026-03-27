@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Master</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       메인 메뉴 화면
+  ════════════════════════════════════════════ -->
+  <div id="menu-screen">
+    <div class="menu-container">
+      <h1 class="game-title">♟ CHESS MASTER</h1>
+      <div class="title-divider"></div>
+
+      <div class="difficulty-list" id="difficulty-list">
+        <div class="difficulty-card" data-difficulty="입문">
+          <span class="stars">★</span>
+          <span class="label">입문</span>
+          <span class="desc">초보자를 위한 체스</span>
+        </div>
+        <div class="difficulty-card" data-difficulty="초급">
+          <span class="stars">★★</span>
+          <span class="label">초급</span>
+          <span class="desc">기초를 배웁시다</span>
+        </div>
+        <div class="difficulty-card selected" data-difficulty="중급">
+          <span class="stars">★★★</span>
+          <span class="label">중급</span>
+          <span class="desc">도전해볼 만해요</span>
+        </div>
+        <div class="difficulty-card" data-difficulty="고급">
+          <span class="stars">★★★★</span>
+          <span class="label">고급</span>
+          <span class="desc">실력자의 관문</span>
+        </div>
+        <div class="difficulty-card" data-difficulty="마스터">
+          <span class="stars">★★★★★</span>
+          <span class="label">마스터</span>
+          <span class="desc">최강 AI에 도전!</span>
+        </div>
+      </div>
+
+      <div class="menu-buttons">
+        <button class="btn-game btn-primary" id="btn-start">게임 시작</button>
+        <button class="btn-game" id="btn-load">저장된 게임 불러오기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       게임 화면
+  ════════════════════════════════════════════ -->
+  <div id="game-screen" style="display:none">
+
+    <header id="game-header">
+      <h1 class="game-title">♟ CHESS MASTER</h1>
+      <div class="header-right">
+        <span id="difficulty-badge" class="difficulty-badge"></span>
+        <button class="btn-game" id="btn-new-game">새게임</button>
+      </div>
+    </header>
+
+    <div id="game-layout">
+
+      <!-- 체스판 영역 -->
+      <div id="board-area">
+        <div id="board-wrapper">
+          <div id="board-with-coords">
+            <div id="rank-labels" class="coord-rail rank-rail" aria-hidden="true"></div>
+            <div id="board-container">
+              <div id="board"></div>
+            </div>
+            <div id="file-labels" class="coord-rail file-rail" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div id="controls">
+          <button class="btn-game" id="btn-hint">💡 힌트</button>
+          <button class="btn-game" id="btn-undo">↩ 무르기</button>
+          <button class="btn-game btn-danger" id="btn-resign">🏳 항복</button>
+        </div>
+      </div>
+
+      <!-- 사이드패널 -->
+      <aside id="sidebar">
+
+        <!-- AI(흑) 플레이어 카드 -->
+        <div class="player-card" id="black-player-card">
+          <div class="player-info">
+            <span class="player-name">AI (흑)</span>
+            <span class="timer" id="timer-black">00:00</span>
+          </div>
+          <div class="captured-pieces" id="captured-by-white"></div>
+          <div class="material-adv" id="material-adv-white"></div>
+        </div>
+
+        <!-- AI 생각 중 표시 -->
+        <div id="ai-thinking" style="display:none">
+          <span class="ai-thinking-text">AI가 생각하고 있어요</span>
+          <span class="ai-thinking-dots">
+            <span>●</span><span>●</span><span>●</span>
+          </span>
+        </div>
+
+        <!-- 기보 기록 -->
+        <div id="move-history-panel">
+          <h3 class="panel-title">기보</h3>
+          <div id="move-history"></div>
+        </div>
+
+        <!-- 플레이어(백) 카드 -->
+        <div class="player-card active" id="white-player-card">
+          <div class="player-info">
+            <span class="player-name">나 (백)</span>
+            <span class="timer" id="timer-white">00:00</span>
+          </div>
+          <div class="captured-pieces" id="captured-by-black"></div>
+          <div class="material-adv" id="material-adv-black"></div>
+        </div>
+
+        <button class="btn-game" id="btn-save">💾 게임 저장</button>
+
+      </aside>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       모달: 프로모션 선택
+  ════════════════════════════════════════════ -->
+  <div id="promotion-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2 class="modal-title">기물을 선택하세요</h2>
+      <div class="promotion-pieces">
+        <button class="promotion-btn" data-piece="Q">
+          <span class="promo-symbol" data-color="white" data-type="Q"></span>
+          <span class="promo-name">퀸</span>
+        </button>
+        <button class="promotion-btn" data-piece="R">
+          <span class="promo-symbol" data-color="white" data-type="R"></span>
+          <span class="promo-name">룩</span>
+        </button>
+        <button class="promotion-btn" data-piece="B">
+          <span class="promo-symbol" data-color="white" data-type="B"></span>
+          <span class="promo-name">비숍</span>
+        </button>
+        <button class="promotion-btn" data-piece="N">
+          <span class="promo-symbol" data-color="white" data-type="N"></span>
+          <span class="promo-name">나이트</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       모달: 게임 종료
+  ════════════════════════════════════════════ -->
+  <div id="gameover-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2 class="modal-title" id="gameover-title"></h2>
+      <p class="modal-sub" id="gameover-sub"></p>
+      <div class="gameover-stats" id="gameover-stats"></div>
+      <div class="modal-buttons">
+        <button class="btn-game btn-primary" id="btn-rematch">다시 도전</button>
+        <button class="btn-game" id="btn-change-difficulty">난이도 변경</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       모달: 항복 확인
+  ════════════════════════════════════════════ -->
+  <div id="resign-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2 class="modal-title" style="font-size:22px">정말 항복하시겠어요?</h2>
+      <p class="modal-sub">현재 게임을 포기하고 AI의 승리로 처리됩니다.</p>
+      <div class="modal-buttons">
+        <button class="btn-game btn-danger" id="btn-resign-confirm">항복</button>
+        <button class="btn-game" id="btn-resign-cancel">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 폭죽 캔버스 -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- 게임 진입점 (의존 순서대로 로드) -->
+  <script src="src/engine/board.js"></script>
+  <script src="src/engine/moves.js"></script>
+  <script src="src/engine/evaluator.js"></script>
+  <script src="src/engine/ai.js"></script>
+  <script src="src/game/game.js"></script>
+  <script src="src/ui/renderer.js"></script>
+  <script src="src/ui/animator.js"></script>
+  <script src="src/ui/effects.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Claude Code 내부 파일
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
