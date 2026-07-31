@@ -55,6 +55,7 @@
       capturedPieces:  { white: [], black: [] },
       status:          'playing',
       difficulty:      '중급',
+      mode:            'ai',      // 'ai' | '2p'
     };
   }
 
@@ -73,6 +74,7 @@
       },
       status:     state.status,
       difficulty: state.difficulty,
+      mode:       state.mode || 'ai',
     };
   }
 

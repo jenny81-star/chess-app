@@ -19,6 +19,18 @@
       <h1 class="game-title">♟ CHESS MASTER</h1>
       <div class="title-divider"></div>
 
+      <!-- 게임 모드 선택 -->
+      <div class="mode-list" id="mode-list">
+        <div class="mode-card selected" data-mode="ai">
+          <span class="mode-icon">🤖</span>
+          <span class="label">AI 대전</span>
+        </div>
+        <div class="mode-card" data-mode="2p">
+          <span class="mode-icon">👥</span>
+          <span class="label">2인 대전</span>
+        </div>
+      </div>
+
       <div class="difficulty-list" id="difficulty-list">
         <div class="difficulty-card" data-difficulty="입문">
           <span class="stars">★</span>
@@ -179,7 +191,7 @@
   <div id="resign-modal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true">
     <div class="modal-card">
       <h2 class="modal-title" style="font-size:22px">정말 항복하시겠어요?</h2>
-      <p class="modal-sub">현재 게임을 포기하고 AI의 승리로 처리됩니다.</p>
+      <p class="modal-sub" id="resign-modal-sub">현재 게임을 포기하고 AI의 승리로 처리됩니다.</p>
       <div class="modal-buttons">
         <button class="btn-game btn-danger" id="btn-resign-confirm">항복</button>
         <button class="btn-game" id="btn-resign-cancel">취소</button>

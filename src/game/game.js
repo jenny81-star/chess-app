@@ -49,6 +49,9 @@
   // ─── 난이도 선택 ─────────────────────────────────────────
   let selectedDifficulty = '중급';
 
+  // ─── 게임 모드 선택 ('ai' | '2p') ─────────────────────────
+  let selectedMode = 'ai';
+
   document.getElementById('difficulty-list').addEventListener('click', (e) => {
     const card = e.target.closest('.difficulty-card');
     if (!card) return;
@@ -57,6 +60,24 @@
     card.classList.add('selected');
     selectedDifficulty = card.dataset.difficulty;
   });
+
+  document.getElementById('mode-list').addEventListener('click', (e) => {
+    const card = e.target.closest('.mode-card');
+    if (!card) return;
+
+    selectedMode = card.dataset.mode;
+    updateModeMenuUI();
+  });
+
+  // 메뉴의 모드 카드 선택 상태 + 난이도 리스트 표시 여부 동기화
+  function updateModeMenuUI() {
+    document.querySelectorAll('.mode-card').forEach(c => {
+      c.classList.toggle('selected', c.dataset.mode === selectedMode);
+    });
+    // 2인 대전은 난이도가 필요 없으므로 리스트를 숨김
+    document.getElementById('difficulty-list').style.display =
+      selectedMode === '2p' ? 'none' : 'flex';
+  }
 
   // ─── 메뉴 버튼 ─────────────────────────────────────────────
   document.getElementById('btn-start').addEventListener('click', () => {
@@ -73,12 +94,25 @@
   });
 
   document.getElementById('btn-resign').addEventListener('click', () => {
+    // 모드에 맞는 항복 확인 문구
+    const subEl = document.getElementById('resign-modal-sub');
+    if (gameState && gameState.mode === '2p') {
+      const winnerName = gameState.turn === 'white' ? '흑' : '백';
+      subEl.textContent = '현재 게임을 포기하고 ' + winnerName + '의 승리로 처리됩니다.';
+    } else {
+      subEl.textContent = '현재 게임을 포기하고 AI의 승리로 처리됩니다.';
+    }
     document.getElementById('resign-modal').style.display = 'flex';
   });
 
   document.getElementById('btn-resign-confirm').addEventListener('click', () => {
     document.getElementById('resign-modal').style.display = 'none';
-    showGameOverModal('lose');
+    if (gameState && gameState.mode === '2p') {
+      // 현재 턴인 플레이어가 항복 → 상대 색 승리
+      showGameOverModal(gameState.turn === 'white' ? 'black-win' : 'white-win');
+    } else {
+      showGameOverModal('lose');
+    }
   });
 
   document.getElementById('btn-resign-cancel').addEventListener('click', () => {
@@ -105,14 +139,17 @@
   });
 
   // ─── 게임 시작 ─────────────────────────────────────────────
-  function startNewGame(difficulty) {
+  function startNewGame(difficulty, mode) {
+    mode = mode || selectedMode;
+
     gameState = createInitialState();
     gameState.difficulty = difficulty;
+    gameState.mode = mode;
 
     selectedSquare = null;
     legalMovesCache = [];
 
-    difficultyBadge.textContent = getDifficultyStars(difficulty) + ' ' + difficulty;
+    updateGameModeUI();
 
     menuScreen.style.display = 'none';
     gameScreen.style.display = 'flex';
@@ -124,8 +161,23 @@
     resetTimer();
     startTimer();
 
-    console.log('[Chess] New game started:', difficulty);
+    console.log('[Chess] New game started:', mode === '2p' ? '2인 대전' : difficulty);
     console.log('[Chess] Initial FEN:', toFEN(gameState));
+  }
+
+  // 게임 화면의 뱃지 + 플레이어 카드 라벨을 현재 모드에 맞게 갱신
+  function updateGameModeUI() {
+    if (!gameState) return;
+    const is2P = gameState.mode === '2p';
+
+    difficultyBadge.textContent = is2P
+      ? '👥 2인 대전'
+      : getDifficultyStars(gameState.difficulty) + ' ' + gameState.difficulty;
+
+    document.querySelector('#black-player-card .player-name').textContent =
+      is2P ? '흑 플레이어' : 'AI (흑)';
+    document.querySelector('#white-player-card .player-name').textContent =
+      is2P ? '백 플레이어' : '나 (백)';
   }
 
   function showMenu() {
@@ -198,6 +250,7 @@
         version:         '1.0',
         savedAt:         new Date().toISOString(),
         difficulty:      gameState.difficulty,
+        mode:            gameState.mode || 'ai',
         board:           gameState.board,
         turn:            gameState.turn,
         castlingRights:  gameState.castlingRights,
@@ -236,14 +289,18 @@
         capturedPieces:  data.capturedPieces || { white: [], black: [] },
         status:          data.status || 'playing',
         difficulty:      data.difficulty || '중급',
+        mode:            data.mode || 'ai',  // 구버전 저장 데이터는 AI 대전으로 간주
       };
 
       selectedDifficulty = gameState.difficulty;
+      selectedMode = gameState.mode;
+      document.querySelectorAll('.difficulty-card').forEach(c =>
+        c.classList.toggle('selected', c.dataset.difficulty === selectedDifficulty));
+      updateModeMenuUI();
       selectedSquare = null;
       legalMovesCache = [];
 
-      difficultyBadge.textContent =
-        getDifficultyStars(gameState.difficulty) + ' ' + gameState.difficulty;
+      updateGameModeUI();
 
       menuScreen.style.display = 'none';
       gameScreen.style.display = 'flex';
@@ -267,12 +324,19 @@
   function showGameOverModal(result) {
     stopTimer();
     const messages = {
-      win:       { title: '🎉 승리!',      sub: '축하합니다! AI를 이겼어요!' },
-      lose:      { title: '😢 아쉬워요...', sub: '다시 도전해볼까요?' },
-      stalemate: { title: '🤝 무승부',     sub: '스테일메이트!' },
-      draw:      { title: '🤝 무승부',     sub: '50수 규칙으로 무승부!' },
+      win:         { title: '🎉 승리!',      sub: '축하합니다! AI를 이겼어요!' },
+      lose:        { title: '😢 아쉬워요...', sub: '다시 도전해볼까요?' },
+      stalemate:   { title: '🤝 무승부',     sub: '스테일메이트!' },
+      draw:        { title: '🤝 무승부',     sub: '50수 규칙으로 무승부!' },
+      // 2인 대전 전용 결과
+      'white-win': { title: '🎉 백 승리!',   sub: '백 플레이어가 이겼어요!' },
+      'black-win': { title: '🎉 흑 승리!',   sub: '흑 플레이어가 이겼어요!' },
     };
     const msg = messages[result] || messages.lose;
+
+    // 2인 대전에서는 "난이도 변경" 대신 "메뉴로" 표시
+    document.getElementById('btn-change-difficulty').textContent =
+      (gameState && gameState.mode === '2p') ? '메뉴로' : '난이도 변경';
 
     document.getElementById('gameover-title').textContent = msg.title;
     document.getElementById('gameover-sub').textContent   = msg.sub;
@@ -350,13 +414,17 @@
 
   function undoLastRound() {
     if (!gameState || gameState.history.length < 1) return;
-    if (gameState.turn !== 'white') return;  // AI 생각 중엔 불가
 
-    const undoCount     = gameState.history.length >= 2 ? 2 : 1;
+    const is2P = gameState.mode === '2p';
+    if (!is2P && gameState.turn !== 'white') return;  // AI 생각 중엔 불가 (AI 대전만)
+
+    // AI 대전: 내 수 + AI 수 = 2수 / 2인 대전: 직전 1수만
+    const undoCount     = is2P ? 1 : (gameState.history.length >= 2 ? 2 : 1);
     const movesToReplay = gameState.history.slice(0, -undoCount);
 
     let state = createInitialState();
     state.difficulty = gameState.difficulty;
+    state.mode       = gameState.mode;
 
     for (const h of movesToReplay) {
       const move = { from: h.from, to: h.to };
@@ -377,6 +445,9 @@
   // ─── AI 턴 제어 ────────────────────────────────────────────
 
   function setAIThinking(thinking) {
+    // 2인 대전에서는 AI 생각 중 표시가 절대 나타나지 않음
+    if (gameState && gameState.mode === '2p') thinking = false;
+
     const aiThinkingEl = document.getElementById('ai-thinking');
     const hintBtn      = document.getElementById('btn-hint');
     const undoBtn      = document.getElementById('btn-undo');
@@ -389,7 +460,8 @@
   }
 
   async function triggerAIMove() {
-    if (!gameState || gameState.turn !== 'black') return;
+    if (!gameState || gameState.mode === '2p') return;  // 2인 대전에서는 AI가 두지 않음
+    if (gameState.turn !== 'black') return;
     if (gameState.status !== 'playing' && gameState.status !== 'check') return;
 
     setAIThinking(true);
@@ -431,7 +503,9 @@
   // ─── 힌트 ──────────────────────────────────────────────────
 
   async function onHintClick() {
-    if (!gameState || gameState.turn !== 'white') return;
+    if (!gameState) return;
+    // AI 대전은 백 턴에만, 2인 대전은 현재 턴 색 기준으로 힌트 제공
+    if (gameState.mode !== '2p' && gameState.turn !== 'white') return;
     if (gameState.status !== 'playing' && gameState.status !== 'check') return;
 
     const hintBtn = document.getElementById('btn-hint');
@@ -475,6 +549,7 @@
     showToast,
     getState:          () => gameState,
     setState:          (s) => { gameState = s; },
+    getMode:           () => (gameState && gameState.mode) || 'ai',
     showGameOverModal,
     updatePlayerCards,
   };

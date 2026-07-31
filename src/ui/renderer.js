@@ -136,7 +136,9 @@
   // ── 클릭 처리 ─────────────────────────────────────────────
   function onSquareClick(row, col) {
     if (!_state) return;
-    if (_state.turn !== 'white') return;
+    // AI 대전: 백(사람) 턴에만 입력 가능 / 2인 대전: 현재 턴 색이 곧 사람
+    var is2P = getMode() === '2p';
+    if (!is2P && _state.turn !== 'white') return;
     if (_state.status !== 'playing' && _state.status !== 'check') return;
 
     // 선택된 기물이 있을 때: 목적지인지 확인
@@ -151,12 +153,21 @@
     }
 
     // 내 기물 클릭: 선택 (이미 선택된 기물이면 재선택)
+    // 2인 대전에서는 "현재 턴 색"의 기물이 곧 내 기물
+    var myColor = is2P ? _state.turn : 'white';
     var piece = _state.board[row][col];
-    if (piece && piece.color === 'white') {
+    if (piece && piece.color === myColor) {
       selectPiece(row, col);
     } else {
       deselect();
     }
+  }
+
+  // 현재 게임 모드 ('ai' | '2p') — state에 없으면 ChessGame에서 조회
+  function getMode() {
+    if (_state && _state.mode) return _state.mode;
+    if (window.ChessGame && window.ChessGame.getMode) return window.ChessGame.getMode();
+    return 'ai';
   }
 
   function selectPiece(row, col) {
@@ -186,7 +197,8 @@
 
     if (isPromotion) {
       try {
-        var pieceType = await askPromotion();
+        var movingColor = _state.board[candidateMoves[0].from[0]][candidateMoves[0].from[1]].color;
+        var pieceType = await askPromotion(movingColor);
         move = candidateMoves.find(function (m) { return m.promotion === pieceType; });
       } catch (e) {
         // 사용자가 프로모션 취소 (Escape)
@@ -236,25 +248,34 @@
     window.ChessGame.updatePlayerCards();
 
     // ── ④ 게임 종료 처리 ─────────────────────────────────────
+    var is2P = getMode() === '2p';
     if (updatedState.status === 'checkmate') {
-      // 백이 흑을 체크메이트 = 플레이어 승리 → 폭죽
+      // 체크메이트: 직전에 둔 색(= 현재 턴의 반대)이 승자 → 폭죽
       if (window.ChessEffects) window.ChessEffects.launchConfetti();
-      setTimeout(function () { window.ChessGame.showGameOverModal('win'); }, 400);
+      var result;
+      if (is2P) {
+        result = updatedState.turn === 'white' ? 'black-win' : 'white-win';
+      } else {
+        // AI 대전에서 executeMove는 항상 백(플레이어)의 수 = 플레이어 승리
+        result = 'win';
+      }
+      setTimeout(function () { window.ChessGame.showGameOverModal(result); }, 400);
     } else if (updatedState.status === 'stalemate' || updatedState.status === 'draw') {
       setTimeout(function () { window.ChessGame.showGameOverModal(updatedState.status); }, 400);
-    } else if (updatedState.turn === 'black') {
+    } else if (!is2P && updatedState.turn === 'black') {
       window.ChessGame.triggerAIMove();
     }
   }
 
   // ── 프로모션 모달 ─────────────────────────────────────────
-  function askPromotion() {
+  function askPromotion(color) {
+    color = color || 'white';  // AI 대전에서는 항상 백 기물
     return new Promise(function (resolve, reject) {
-      // 모달 기물 아이콘 업데이트 (항상 백 기물)
+      // 모달 기물 아이콘 업데이트 (프로모션하는 색의 기물로)
       document.querySelectorAll('.promo-symbol').forEach(function (span) {
         var type = span.dataset.type;
-        if (type && PIECE_SVG.white[type]) {
-          span.innerHTML = PIECE_SVG.white[type];
+        if (type && PIECE_SVG[color][type]) {
+          span.innerHTML = PIECE_SVG[color][type];
         }
       });
 
