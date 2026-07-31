@@ -1,6 +1,9 @@
 # Claude Code 내부 파일
 .claude/
 
+# Dependencies
+node_modules/
+
 # OS
 .DS_Store
 Thumbs.db

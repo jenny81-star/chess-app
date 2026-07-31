@@ -182,7 +182,7 @@
     _legalMoves = [];
 
     var move;
-    var isPromotion = candidateMoves.length > 1 && candidateMoves[0].promotion !== undefined;
+    var isPromotion = candidateMoves.some(function(m) { return m.promotion !== undefined; });
 
     if (isPromotion) {
       try {
