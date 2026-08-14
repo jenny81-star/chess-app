@@ -61,8 +61,9 @@ async function waitForAI(page, timeout = 12000) {
   await page.screenshot({ path: `${SS_DIR}/s6-01-menu.png`, fullPage: true });
 
   const modeCards = await page.$$('.mode-card');
-  results.twoPlayerChecks.modeCardsExist = modeCards.length === 2;
-  console.log(`  Mode cards exist (2): ${results.twoPlayerChecks.modeCardsExist}`);
+  // 기물 배치 모드 추가로 3개 (AI 대전 / 2인 대전 / 기물 배치)
+  results.twoPlayerChecks.modeCardsExist = modeCards.length === 3;
+  console.log(`  Mode cards exist (3): ${results.twoPlayerChecks.modeCardsExist}`);
 
   await page.click('.mode-card[data-mode="2p"]');
   await page.waitForTimeout(300);

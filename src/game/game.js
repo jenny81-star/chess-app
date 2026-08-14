@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const { createInitialState, applyMove, toFEN } = window.ChessBoard;
+  const { createInitialState, cloneState, applyMove, toFEN } = window.ChessBoard;
   const {
     getLegalMoves,
     getAllLegalMoves,
@@ -21,6 +21,7 @@
   let gameState = null;
   let selectedSquare = null;   // [row, col] | null
   let legalMovesCache = [];    // 선택된 기물의 합법 이동 목록
+  let startState = null;       // 커스텀 시작 포지션(기물 배치 모드) — null이면 표준 초기 배치
 
   // ─── 타이머 ──────────────────────────────────────────────
   let _whiteTime     = 0;
@@ -74,9 +75,9 @@
     document.querySelectorAll('.mode-card').forEach(c => {
       c.classList.toggle('selected', c.dataset.mode === selectedMode);
     });
-    // 2인 대전은 난이도가 필요 없으므로 리스트를 숨김
+    // 2인 대전·기물 배치는 난이도가 필요 없으므로 리스트를 숨김
     document.getElementById('difficulty-list').style.display =
-      selectedMode === '2p' ? 'none' : 'flex';
+      (selectedMode === '2p' || selectedMode === 'editor') ? 'none' : 'flex';
   }
 
   // ─── 메뉴 버튼 ─────────────────────────────────────────────
@@ -142,6 +143,13 @@
   function startNewGame(difficulty, mode) {
     mode = mode || selectedMode;
 
+    // 기물 배치 모드: 게임을 바로 시작하지 않고 에디터 화면으로 진입
+    if (mode === 'editor') {
+      if (window.ChessEditor) window.ChessEditor.open();
+      return;
+    }
+
+    startState = null;
     gameState = createInitialState();
     gameState.difficulty = difficulty;
     gameState.mode = mode;
@@ -182,7 +190,53 @@
 
   function showMenu() {
     gameScreen.style.display = 'none';
+    const editorScreen = document.getElementById('editor-screen');
+    if (editorScreen) editorScreen.style.display = 'none';
     menuScreen.style.display = 'flex';
+  }
+
+  // ─── 커스텀 포지션으로 게임 시작 (기물 배치 모드 → 대국) ────
+  function startFromPosition(state) {
+    gameState = state;
+    startState = cloneState(state);   // 무르기/리플레이의 기준점
+    gameState = updateGameStatus(gameState);
+
+    selectedSquare = null;
+    legalMovesCache = [];
+
+    updateGameModeUI();
+
+    menuScreen.style.display = 'none';
+    const editorScreen = document.getElementById('editor-screen');
+    if (editorScreen) editorScreen.style.display = 'none';
+    gameScreen.style.display = 'flex';
+
+    renderBoard();
+    updatePlayerCards();
+    if (window.ChessRenderer) window.ChessRenderer.onBoardReady(gameState);
+
+    resetTimer();
+    startTimer();
+
+    console.log('[Chess] Custom position game started:', gameState.mode, '| FEN:', toFEN(gameState));
+
+    // 시작 즉시 승패가 나는 포지션(책의 메이트 문제 등)도 허용하고 결과를 바로 표시
+    if (gameState.status === 'checkmate') {
+      // 현재 턴 쪽이 메이트당한 상태
+      let result;
+      if (gameState.mode === '2p') {
+        result = gameState.turn === 'white' ? 'black-win' : 'white-win';
+      } else {
+        result = gameState.turn === 'white' ? 'lose' : 'win';
+      }
+      if (result !== 'lose' && window.ChessEffects) window.ChessEffects.launchConfetti();
+      setTimeout(() => showGameOverModal(result), 400);
+    } else if (gameState.status === 'stalemate' || gameState.status === 'draw') {
+      setTimeout(() => showGameOverModal(gameState.status), 400);
+    } else if (gameState.mode !== '2p' && gameState.turn === 'black') {
+      // AI 대전에서 흑 차례로 시작하면 즉시 AI가 둠
+      triggerAIMove();
+    }
   }
 
   // ─── 보드 렌더링 ─────────────────────────────────────────
@@ -215,9 +269,10 @@
         boardEl.appendChild(square);
       }
     }
-
-    boardEl.addEventListener('click', onBoardClick);
   }
+
+  // 보드 클릭 리스너는 renderBoard()마다 중복 등록되지 않도록 한 번만 등록
+  boardEl.addEventListener('click', onBoardClick);
 
   function onBoardClick(e) {
     const square = e.target.closest('.square');
@@ -260,6 +315,7 @@
         history:         gameState.history,
         capturedPieces:  gameState.capturedPieces,
         status:          gameState.status,
+        startPosition:   startState,   // 커스텀 시작 포지션 (표준 시작이면 null)
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
       showToast('게임이 저장되었습니다!', 2000, 'success');
@@ -291,6 +347,9 @@
         difficulty:      data.difficulty || '중급',
         mode:            data.mode || 'ai',  // 구버전 저장 데이터는 AI 대전으로 간주
       };
+
+      // 커스텀 시작 포지션 복원 (구버전 저장에는 없음 → 표준 시작으로 간주)
+      startState = data.startPosition || null;
 
       selectedDifficulty = gameState.difficulty;
       selectedMode = gameState.mode;
@@ -422,7 +481,8 @@
     const undoCount     = is2P ? 1 : (gameState.history.length >= 2 ? 2 : 1);
     const movesToReplay = gameState.history.slice(0, -undoCount);
 
-    let state = createInitialState();
+    // 커스텀 포지션(기물 배치 모드)에서 시작한 게임은 그 포지션부터 리플레이
+    let state = startState ? cloneState(startState) : createInitialState();
     state.difficulty = gameState.difficulty;
     state.mode       = gameState.mode;
 
@@ -547,6 +607,8 @@
     triggerAIMove,
     setAIThinking,
     showToast,
+    showMenu,
+    startFromPosition,
     getState:          () => gameState,
     setState:          (s) => { gameState = s; },
     getMode:           () => (gameState && gameState.mode) || 'ai',

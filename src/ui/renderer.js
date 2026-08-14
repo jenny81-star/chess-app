@@ -437,6 +437,7 @@
     onBoardReady,
     onSquareClick,
     showHint,
+    PIECE_SVG,   // 에디터 팔레트 등에서 재사용
   };
 
 })();

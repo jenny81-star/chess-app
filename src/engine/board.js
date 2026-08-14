@@ -78,6 +78,37 @@
     };
   }
 
+  // ─── 커스텀 포지션 → 게임 상태 (기물 배치 모드) ──────────
+  // castlingRights는 킹/룩이 실제 홈 칸에 있을 때만 true로 유도한다.
+  function createStateFromBoard(board, options) {
+    options = options || {};
+    const b = board.map(row => row.map(p => (p ? { ...p } : null)));
+    const has = (r, c, type, color) => {
+      const p = b[r][c];
+      return !!p && p.type === type && p.color === color;
+    };
+    const wKingHome = has(7, 4, 'K', 'white');   // e1
+    const bKingHome = has(0, 4, 'K', 'black');   // e8
+    return {
+      board: b,
+      turn: options.turn === 'black' ? 'black' : 'white',
+      castlingRights: {
+        whiteKingSide:  wKingHome && has(7, 7, 'R', 'white'),  // h1
+        whiteQueenSide: wKingHome && has(7, 0, 'R', 'white'),  // a1
+        blackKingSide:  bKingHome && has(0, 7, 'R', 'black'),  // h8
+        blackQueenSide: bKingHome && has(0, 0, 'R', 'black'),  // a8
+      },
+      enPassantTarget: null,
+      halfMoveClock:   0,
+      fullMoveNumber:  1,
+      history:         [],
+      capturedPieces:  { white: [], black: [] },
+      status:          'playing',
+      difficulty:      options.difficulty || '중급',
+      mode:            options.mode || 'ai',
+    };
+  }
+
   // ─── 이동 적용 ───────────────────────────────────────────
 
   function applyMove(state, move) {
@@ -205,6 +236,7 @@
     inBounds,
     findKing,
     createInitialState,
+    createStateFromBoard,
     cloneState,
     applyMove,
     toFEN,

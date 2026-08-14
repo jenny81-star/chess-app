@@ -167,15 +167,23 @@
         if (!isInCheck(board, color)) {
           const kingRow = color === 'white' ? 7 : 0;
           if (row === kingRow && col === 4) {
+            // 캐슬링은 해당 코너에 자기 색 룩이 실제로 있어야만 가능
+            // (에디터 등에서 룩 없이 castlingRights만 true인 상태 방어)
+            const ksRook  = board[kingRow][7];
             const ksRight = color === 'white' ? castlingRights.whiteKingSide : castlingRights.blackKingSide;
-            if (ksRight && !board[kingRow][5] && !board[kingRow][6] &&
+            if (ksRight &&
+                ksRook && ksRook.type === 'R' && ksRook.color === color &&
+                !board[kingRow][5] && !board[kingRow][6] &&
                 !isSquareAttacked(board, kingRow, 5, enemy) &&
                 !isSquareAttacked(board, kingRow, 6, enemy)) {
               addMove(kingRow, 6, { castling: 'kingside' });
             }
 
+            const qsRook  = board[kingRow][0];
             const qsRight = color === 'white' ? castlingRights.whiteQueenSide : castlingRights.blackQueenSide;
-            if (qsRight && !board[kingRow][3] && !board[kingRow][2] && !board[kingRow][1] &&
+            if (qsRight &&
+                qsRook && qsRook.type === 'R' && qsRook.color === color &&
+                !board[kingRow][3] && !board[kingRow][2] && !board[kingRow][1] &&
                 !isSquareAttacked(board, kingRow, 3, enemy) &&
                 !isSquareAttacked(board, kingRow, 2, enemy)) {
               addMove(kingRow, 2, { castling: 'queenside' });

@@ -248,13 +248,15 @@ button { cursor: pointer; font-family: inherit; }
 /* ═══════════════════════════════════════════════════════════
    게임 화면 레이아웃
 ════════════════════════════════════════════════════════════ */
-#game-screen {
+#game-screen,
+#editor-screen {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-#game-header {
+#game-header,
+#editor-header {
   height: 56px;
   padding: 0 24px;
   display: flex;
@@ -264,7 +266,8 @@ button { cursor: pointer; font-family: inherit; }
   border-bottom: 1px solid rgba(226, 185, 111, 0.12);
   flex-shrink: 0;
 }
-#game-header .game-title {
+#game-header .game-title,
+#editor-header .game-title {
   font-size: 20px;
 }
 
@@ -283,14 +286,16 @@ button { cursor: pointer; font-family: inherit; }
   border-radius: 12px;
 }
 
-#game-layout {
+#game-layout,
+#editor-layout {
   flex: 1;
   display: flex;
   overflow: hidden;
 }
 
 /* ─── 체스판 영역 ─────────────────────────────────────── */
-#board-area {
+#board-area,
+#editor-board-area {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -300,7 +305,8 @@ button { cursor: pointer; font-family: inherit; }
   gap: 16px;
 }
 
-#board-wrapper {
+#board-wrapper,
+#editor-board-wrapper {
   padding: 28px;
   background: linear-gradient(135deg, #2a1f12 0%, #1a1208 100%);
   border-radius: 4px;
@@ -330,12 +336,14 @@ button { cursor: pointer; font-family: inherit; }
   display: none;
 }
 
-#board-container {
+#board-container,
+#editor-board-container {
   width: min(calc(100vh - 200px), calc(100vw - 360px), 640px);
   aspect-ratio: 1;
 }
 
-#board {
+#board,
+#editor-board {
   width: 100%;
   height: 100%;
   display: grid;
@@ -503,7 +511,8 @@ button { cursor: pointer; font-family: inherit; }
 /* ═══════════════════════════════════════════════════════════
    사이드 패널
 ════════════════════════════════════════════════════════════ */
-#sidebar {
+#sidebar,
+#editor-sidebar {
   width: 280px;
   min-width: 240px;
   display: flex;
@@ -758,6 +767,129 @@ button { cursor: pointer; font-family: inherit; }
 .toast.info    { border-color: rgba(80, 160, 220, 0.3); color: #a0c8e4; }
 
 /* ═══════════════════════════════════════════════════════════
+   기물 배치(에디터) 화면
+════════════════════════════════════════════════════════════ */
+.editor-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 640px;
+}
+
+/* 팔레트 */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.palette-piece {
+  aspect-ratio: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--gold-dark);
+  border-radius: 8px;
+  padding: 3px;
+  transition: all 0.15s ease;
+}
+.palette-piece svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.palette-piece:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--gold-mid);
+  box-shadow: 0 0 12px rgba(226, 185, 111, 0.2);
+}
+/* selected 상태는 hover와 확실히 구분 (mode-card와 동일 패턴) */
+.palette-piece.selected,
+.palette-tool.selected {
+  background: rgba(226, 185, 111, 0.18);
+  border-color: var(--gold-light);
+  border-width: 2px;
+  box-shadow: 0 0 16px rgba(226, 185, 111, 0.45), inset 0 0 8px rgba(226, 185, 111, 0.1);
+}
+
+/* 지우개 등 도구 버튼 */
+.palette-tool {
+  background: var(--bg-card);
+  border: 1px solid var(--gold-dark);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 10px;
+  transition: all 0.15s ease;
+}
+.palette-tool:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--gold-mid);
+}
+
+/* 기물 수 표시 */
+#editor-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2px 0;
+}
+
+/* 선공 선택 */
+.editor-turn-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.turn-buttons {
+  display: flex;
+  gap: 8px;
+}
+.turn-btn { flex: 1; }
+.turn-btn.selected {
+  background: rgba(226, 185, 111, 0.18);
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+  box-shadow: 0 0 12px rgba(226, 185, 111, 0.3);
+}
+
+/* 하단 액션 버튼 */
+.editor-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* 대국 방식 모달: 난이도 알약 버튼 */
+.editor-diff-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.diff-pill {
+  background: transparent;
+  border: 1px solid var(--gold-dark);
+  color: var(--text-muted);
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  transition: all 0.15s ease;
+}
+.diff-pill:hover {
+  border-color: var(--gold-mid);
+  color: var(--text-primary);
+}
+.diff-pill.selected {
+  background: rgba(226, 185, 111, 0.18);
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════
    폭죽 캔버스
 ════════════════════════════════════════════════════════════ */
 #confetti-canvas {
@@ -773,10 +905,12 @@ button { cursor: pointer; font-family: inherit; }
    반응형
 ════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
-  #game-layout {
+  #game-layout,
+  #editor-layout {
     flex-direction: column;
   }
-  #sidebar {
+  #sidebar,
+  #editor-sidebar {
     width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
@@ -784,7 +918,8 @@ button { cursor: pointer; font-family: inherit; }
     border-top: 1px solid rgba(226, 185, 111, 0.1);
     max-height: none;
   }
-  #board-container {
+  #board-container,
+  #editor-board-container {
     width: min(90vw, calc(100vh - 300px));
   }
   #move-history-panel {
@@ -794,8 +929,10 @@ button { cursor: pointer; font-family: inherit; }
 }
 
 @media (max-width: 480px) {
-  #game-header .game-title { font-size: 16px; }
-  #board-wrapper { padding: 16px; }
+  #game-header .game-title,
+  #editor-header .game-title { font-size: 16px; }
+  #board-wrapper,
+  #editor-board-wrapper { padding: 16px; }
   #controls { gap: 6px; }
   .btn-game { padding: 8px 12px; font-size: 12px; }
 }
