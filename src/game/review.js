@@ -55,6 +55,9 @@
     _notations = window.ChessRenderer.buildNotations(startState, game.history);
     _active = true;
 
+    // 옛 저장 게임 등 quality 미분석 수가 있으면 한 수씩 백그라운드로 채운다
+    if (window.ChessQuality) window.ChessQuality.sync();
+
     document.getElementById('gameover-modal').style.display = 'none';
     document.getElementById('controls').style.display = 'none';
     document.getElementById('review-bar').style.display = 'flex';
@@ -148,10 +151,22 @@
 
   function reviewMoveSpan(entry, idx) {
     if (!entry) return '<span style="flex:1"></span>';
-    const notation = _notations[idx];
+    const notation = window.ChessRenderer.notationToHTML
+      ? window.ChessRenderer.notationToHTML(_notations[idx])
+      : _notations[idx];
     const isActiveMove = (idx === _index - 1);
     return '<span class="review-move' + (isActiveMove ? ' active' : '') + '"' +
       ' data-idx="' + idx + '" style="flex:1">' + notation + '</span>';
+  }
+
+  // 품질 분석이 한 수 채워질 때마다 quality.js가 호출 — 표기만 다시 계산해 갱신
+  function refreshNotations() {
+    if (!_active) return;
+    const game = window.ChessGame.getState();
+    if (!game) return;
+    _notations = window.ChessRenderer.buildNotations(
+      window.ChessGame.getStartState(), game.history);
+    renderReviewHistory();
   }
 
   // ── 키보드 탐색 ───────────────────────────────────────────
@@ -201,6 +216,7 @@
     exit,
     isActive,
     goTo,
+    refreshNotations,   // 품질 분석 완료 시 기보 목록 갱신 (quality.js)
     buildStates,   // 테스트용
   };
 })();

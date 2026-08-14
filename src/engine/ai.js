@@ -204,6 +204,14 @@
     });
   }
 
+  // 분석용 동기 API (수 품질 판정 등에서 사용)
+  // getBestMove/getHintMove가 남긴 지난 _searchDeadline이 그대로면 탐색이
+  // 곧바로 중단되므로, 호출 시점 기준으로 데드라인을 새로 잡는다.
+  function rankMovesSync(state, depth, color) {
+    _searchDeadline = Date.now() + MAX_SEARCH_MS;
+    return computeRankedMoves(state, depth, color || state.turn);
+  }
+
   function analyzePosition(state, depth) {
     depth = depth || 3;
     return new Promise((resolve, reject) => {
@@ -224,5 +232,6 @@
     getBestMove,
     getHintMove,
     analyzePosition,
+    rankMovesSync,   // 분석용 (수 품질 판정) — 동기 실행
   };
 })();

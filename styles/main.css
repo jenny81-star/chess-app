@@ -708,6 +708,27 @@ button { cursor: pointer; font-family: inherit; }
   font-weight: 600;
 }
 
+/* ─── 수 품질 기호 (!/!!/?/??) ─────────────────────────── */
+.mq { font-weight: 700; }
+.mq-brilliant { color: var(--gold-light); }   /* !! 아주 좋은 수 */
+.mq-good      { color: #8fbe6d; }             /* !  좋은 수 (하이라이트 초록 계열) */
+.mq-mistake   { color: #e09a4e; }             /* ?  실수 */
+.mq-blunder   { color: #e05a5a; }             /* ?? 심각한 실수 */
+
+/* active(골드 배경) 위에서도 기호가 묻히지 않게 살짝 밝게 */
+#move-history .review-move.active .mq-blunder { color: #ffd2d2; }
+#move-history .review-move.active .mq-mistake { color: #ffe3bd; }
+
+/* 복기 컨트롤 바의 기호 범례 — 작은 글씨 한 줄 */
+.quality-legend {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+}
+.quality-legend .mq { font-family: var(--font-mono); }
+
 /* ═══════════════════════════════════════════════════════════
    모달
 ════════════════════════════════════════════════════════════ */

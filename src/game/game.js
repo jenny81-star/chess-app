@@ -157,6 +157,9 @@
     gameState.difficulty = difficulty;
     gameState.mode = mode;
 
+    // 이전 게임의 품질 분석 예약 취소
+    if (window.ChessQuality) window.ChessQuality.reset();
+
     selectedSquare = null;
     legalMovesCache = [];
 
@@ -205,6 +208,9 @@
     gameState = state;
     startState = cloneState(state);   // 무르기/리플레이의 기준점
     gameState = updateGameStatus(gameState);
+
+    // 이전 게임의 품질 분석 예약 취소
+    if (window.ChessQuality) window.ChessQuality.reset();
 
     selectedSquare = null;
     legalMovesCache = [];
@@ -382,6 +388,9 @@
       resetTimer();
       startTimer();
 
+      // quality 없는 옛 저장 데이터도 한 수씩 백그라운드로 채운다
+      if (window.ChessQuality) window.ChessQuality.sync();
+
       const savedDate = new Date(data.savedAt).toLocaleString('ko-KR');
       showToast('저장된 게임을 불러왔습니다. (' + savedDate + ')', 3000, 'success');
     } catch (err) {
@@ -506,11 +515,19 @@
       state = applyMove(state, move);
     }
 
+    // 리플레이로 새로 만들어진 엔트리에 기존 품질 분석 결과를 보존 (재분석 방지)
+    state.history.forEach((h, i) => {
+      if (movesToReplay[i] && movesToReplay[i].quality !== undefined) {
+        h.quality = movesToReplay[i].quality;
+      }
+    });
+
     state = updateGameStatus(state);
     gameState = state;
 
     if (window.ChessRenderer) window.ChessRenderer.onBoardReady(gameState);
     updatePlayerCards();
+    if (window.ChessQuality) window.ChessQuality.sync();  // 미분석 수가 남았으면 이어서
     showToast('한 수 되돌렸습니다.', 1500, 'info');
   }
 
@@ -519,6 +536,9 @@
   function setAIThinking(thinking) {
     // 2인 대전에서는 AI 생각 중 표시가 절대 나타나지 않음
     if (gameState && gameState.mode === '2p') thinking = false;
+
+    // 품질 분석 큐 일시정지/재개 — 동기 엔진이라 AI 탐색과 겹치면 체감 지연 발생
+    if (window.ChessQuality) window.ChessQuality.setBusy(thinking);
 
     const aiThinkingEl = document.getElementById('ai-thinking');
     const hintBtn      = document.getElementById('btn-hint');

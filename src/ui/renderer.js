@@ -249,6 +249,9 @@
     updateMoveHistory(_state);
     window.ChessGame.updatePlayerCards();
 
+    // 방금 둔 수 품질 분석 예약 (백그라운드 — AI 턴이 시작되면 큐잉됨)
+    if (window.ChessQuality) window.ChessQuality.sync();
+
     // ── ④ 게임 종료 처리 ─────────────────────────────────────
     var is2P = getMode() === '2p';
     if (updatedState.status === 'checkmate') {
@@ -371,8 +374,8 @@
       var isLastWhite = (i === lastIdx);
       var isLastBlack = (i + 1 === lastIdx);
 
-      var whiteStr = notations[i];
-      var blackStr = (i + 1 < history.length) ? notations[i + 1] : '';
+      var whiteStr = notationToHTML(notations[i]);
+      var blackStr = (i + 1 < history.length) ? notationToHTML(notations[i + 1]) : '';
 
       rows.push(
         '<div class="move-row" style="display:flex;gap:4px;padding:2px 4px;font-family:var(--font-mono);font-size:12px">' +
@@ -428,9 +431,28 @@
       if (window.ChessMoves && window.ChessMoves.isInCheck(s.board, s.turn)) {
         suffix = window.ChessMoves.isCheckmate(s, s.turn) ? '#' : '+';
       }
-      notations.push(base + suffix);
+      // 수 품질 기호(!/!!/?/??)는 체크 기호 다음에 (예: Qxf7+?, Nf3!)
+      // quality는 백그라운드 분석(quality.js)이 엔트리에 캐시한 값 — 미분석이면 생략
+      notations.push(base + suffix + (h.quality || ''));
     }
     return notations;
+  }
+
+  // ── 기보 표기 → HTML: 품질 기호만 색상용 span으로 감싼다 ──
+  var QUALITY_CLASS = {
+    '!!': 'mq-brilliant',
+    '!':  'mq-good',
+    '?':  'mq-mistake',
+    '??': 'mq-blunder',
+  };
+
+  function notationToHTML(notation) {
+    if (!notation) return '';
+    var m = notation.match(/(\?\?|!!|[?!])$/);
+    if (!m) return notation;
+    var sym = m[1];
+    return notation.slice(0, notation.length - sym.length) +
+      '<span class="mq ' + QUALITY_CLASS[sym] + '">' + sym + '</span>';
   }
 
   // ── 힌트 하이라이트 ───────────────────────────────────────
@@ -469,7 +491,9 @@
     onSquareClick,
     showHint,
     historyEntryToNotation,   // 리뷰 모드 기보 표기에서 재사용
-    buildNotations,           // 체크(+)/체크메이트(#) 접미사 포함 기보 리스트
+    buildNotations,           // 체크(+/#) + 품질(!/?) 접미사 포함 기보 리스트
+    notationToHTML,           // 품질 기호를 색상 span으로 감싼 HTML
+    updateMoveHistory,        // 품질 분석 완료 시 기보 패널만 갱신 (quality.js)
     PIECE_SVG,   // 에디터 팔레트 등에서 재사용
   };
 
