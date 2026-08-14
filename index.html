@@ -102,6 +102,22 @@
           <button class="btn-game" id="btn-undo">↩ 무르기</button>
           <button class="btn-game btn-danger" id="btn-resign">🏳 항복</button>
         </div>
+
+        <!-- 기보 확인(리뷰) 컨트롤 바 — 게임 종료 후 복기 전용 -->
+        <div id="review-bar" style="display:none">
+          <span class="review-badge" id="review-result-badge"></span>
+          <div class="review-nav">
+            <button class="btn-game review-btn" id="btn-review-first" title="처음으로 (Home)">⏮</button>
+            <button class="btn-game review-btn" id="btn-review-prev" title="이전 수 (←)">◀</button>
+            <span class="review-position" id="review-position">0 / 0수</span>
+            <button class="btn-game review-btn" id="btn-review-next" title="다음 수 (→)">▶</button>
+            <button class="btn-game review-btn" id="btn-review-last" title="마지막으로 (End)">⏭</button>
+          </div>
+          <div class="review-exit">
+            <button class="btn-game btn-primary" id="btn-review-rematch">다시 도전</button>
+            <button class="btn-game" id="btn-review-menu">메뉴로</button>
+          </div>
+        </div>
       </div>
 
       <!-- 사이드패널 -->
@@ -257,6 +273,7 @@
       <div class="gameover-stats" id="gameover-stats"></div>
       <div class="modal-buttons">
         <button class="btn-game btn-primary" id="btn-rematch">다시 도전</button>
+        <button class="btn-game" id="btn-review">📜 기보 확인</button>
         <button class="btn-game" id="btn-change-difficulty">난이도 변경</button>
       </div>
     </div>
@@ -288,6 +305,7 @@
   <script src="src/ui/renderer.js"></script>
   <script src="src/ui/animator.js"></script>
   <script src="src/ui/effects.js"></script>
+  <script src="src/game/review.js"></script>
   <script src="src/ui/editor.js"></script>
 
 </body>

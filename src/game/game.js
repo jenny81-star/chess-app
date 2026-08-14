@@ -143,6 +143,9 @@
   function startNewGame(difficulty, mode) {
     mode = mode || selectedMode;
 
+    // 리뷰 모드 중이었다면 해제 (곧바로 새 화면이 그려지므로 silent)
+    if (window.ChessReview) window.ChessReview.exit({ silent: true });
+
     // 기물 배치 모드: 게임을 바로 시작하지 않고 에디터 화면으로 진입
     if (mode === 'editor') {
       if (window.ChessEditor) window.ChessEditor.open();
@@ -189,6 +192,7 @@
   }
 
   function showMenu() {
+    if (window.ChessReview) window.ChessReview.exit({ silent: true });
     gameScreen.style.display = 'none';
     const editorScreen = document.getElementById('editor-screen');
     if (editorScreen) editorScreen.style.display = 'none';
@@ -197,6 +201,7 @@
 
   // ─── 커스텀 포지션으로 게임 시작 (기물 배치 모드 → 대국) ────
   function startFromPosition(state) {
+    if (window.ChessReview) window.ChessReview.exit({ silent: true });
     gameState = state;
     startState = cloneState(state);   // 무르기/리플레이의 기준점
     gameState = updateGameStatus(gameState);
@@ -275,6 +280,9 @@
   boardEl.addEventListener('click', onBoardClick);
 
   function onBoardClick(e) {
+    // 리뷰 모드에서는 보드 입력 완전 차단
+    if (window.ChessReview && window.ChessReview.isActive()) return;
+
     const square = e.target.closest('.square');
     if (!square || !gameState) return;
 
@@ -333,6 +341,9 @@
         return;
       }
       const data = JSON.parse(raw);
+
+      // 리뷰 모드 중 불러오기 → 리뷰 해제 후 정상 로드
+      if (window.ChessReview) window.ChessReview.exit({ silent: true });
 
       gameState = {
         board:           data.board,
@@ -472,6 +483,7 @@
   // ─── 무르기 ──────────────────────────────────────────────────
 
   function undoLastRound() {
+    if (window.ChessReview && window.ChessReview.isActive()) return;
     if (!gameState || gameState.history.length < 1) return;
 
     const is2P = gameState.mode === '2p';
@@ -520,6 +532,7 @@
   }
 
   async function triggerAIMove() {
+    if (window.ChessReview && window.ChessReview.isActive()) return;  // 리뷰 모드 방어
     if (!gameState || gameState.mode === '2p') return;  // 2인 대전에서는 AI가 두지 않음
     if (gameState.turn !== 'black') return;
     if (gameState.status !== 'playing' && gameState.status !== 'check') return;
@@ -563,6 +576,7 @@
   // ─── 힌트 ──────────────────────────────────────────────────
 
   async function onHintClick() {
+    if (window.ChessReview && window.ChessReview.isActive()) return;
     if (!gameState) return;
     // AI 대전은 백 턴에만, 2인 대전은 현재 턴 색 기준으로 힌트 제공
     if (gameState.mode !== '2p' && gameState.turn !== 'white') return;
@@ -611,6 +625,7 @@
     startFromPosition,
     getState:          () => gameState,
     setState:          (s) => { gameState = s; },
+    getStartState:     () => startState,
     getMode:           () => (gameState && gameState.mode) || 'ai',
     showGameOverModal,
     updatePlayerCards,

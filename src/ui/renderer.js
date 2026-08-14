@@ -136,6 +136,8 @@
   // ── 클릭 처리 ─────────────────────────────────────────────
   function onSquareClick(row, col) {
     if (!_state) return;
+    // 리뷰 모드에서는 수를 둘 수 없음 (game.js에서도 차단하지만 방어적으로)
+    if (window.ChessReview && window.ChessReview.isActive()) return;
     // AI 대전: 백(사람) 턴에만 입력 가능 / 2인 대전: 현재 턴 색이 곧 사람
     var is2P = getMode() === '2p';
     if (!is2P && _state.turn !== 'white') return;
@@ -437,6 +439,7 @@
     onBoardReady,
     onSquareClick,
     showHint,
+    historyEntryToNotation,   // 리뷰 모드 기보 표기에서 재사용
     PIECE_SVG,   // 에디터 팔레트 등에서 재사용
   };
 

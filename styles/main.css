@@ -649,6 +649,65 @@ button { cursor: pointer; font-family: inherit; }
 .move.black { color: var(--text-primary); }
 .move.last-move { color: var(--gold-light); font-weight: 600; }
 
+/* ─── 기보 확인(리뷰) 모드 ─────────────────────────────── */
+#review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.review-badge {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--gold-mid);
+  padding: 6px 14px;
+  border: 1px solid var(--gold-dark);
+  border-radius: 20px;
+  background: var(--bg-card);
+  white-space: nowrap;
+}
+.review-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1;
+}
+.review-position {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+  min-width: 76px;
+  text-align: center;
+}
+.review-exit {
+  display: flex;
+  gap: 6px;
+}
+
+/* 리뷰 중 기보 목록: 클릭 가능한 수 + 현재 수 하이라이트 */
+#move-history { position: relative; }
+#move-history .review-move {
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 4px;
+  transition: background 0.15s;
+}
+#move-history .review-move:hover {
+  background: rgba(226, 185, 111, 0.15);
+  color: var(--gold-light);
+}
+#move-history .review-move.active {
+  background: var(--gold-dark);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* ═══════════════════════════════════════════════════════════
    모달
 ════════════════════════════════════════════════════════════ */
