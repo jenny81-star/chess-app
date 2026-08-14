@@ -363,16 +363,16 @@
     var history = state.history;
     var rows = [];
     var lastIdx = history.length - 1;
+    var startState = (window.ChessGame && window.ChessGame.getStartState) ? window.ChessGame.getStartState() : null;
+    var notations = buildNotations(startState, history);
 
     for (var i = 0; i < history.length; i += 2) {
       var moveNum    = Math.floor(i / 2) + 1;
-      var whiteEntry = history[i];
-      var blackEntry = history[i + 1];
       var isLastWhite = (i === lastIdx);
       var isLastBlack = (i + 1 === lastIdx);
 
-      var whiteStr = historyEntryToNotation(whiteEntry);
-      var blackStr = blackEntry ? historyEntryToNotation(blackEntry) : '';
+      var whiteStr = notations[i];
+      var blackStr = (i + 1 < history.length) ? notations[i + 1] : '';
 
       rows.push(
         '<div class="move-row" style="display:flex;gap:4px;padding:2px 4px;font-family:var(--font-mono);font-size:12px">' +
@@ -402,6 +402,35 @@
     var promoStr = entry.promotion ? '=' + entry.promotion : '';
 
     return pieceStr + fromFile + capture + toSquare + promoStr;
+  }
+
+  // ── 기보 표기: 체크(+)/체크메이트(#) 접미사를 붙인 전체 리스트 ──
+  // history 자체엔 수를 둔 뒤의 포지션 정보가 없어(체크 여부 판정 불가),
+  // 시작 상태에서 순차 리플레이하며 각 수 뒤 포지션을 직접 판정한다.
+  // (엔진의 applyMove 실행 경로 자체는 건드리지 않음 — AI 탐색 성능 무관)
+  function buildNotations(startState, history) {
+    if (!window.ChessBoard) return history.map(historyEntryToNotation);
+
+    var s = startState ? window.ChessBoard.cloneState(startState) : window.ChessBoard.createInitialState();
+    var notations = [];
+
+    for (var i = 0; i < history.length; i++) {
+      var h = history[i];
+      var move = { from: h.from, to: h.to };
+      if (h.castling)  move.castling  = h.castling;
+      if (h.enPassant) move.enPassant = h.enPassant;
+      if (h.promotion) move.promotion = h.promotion;
+
+      s = window.ChessBoard.applyMove(s, move);
+
+      var base = historyEntryToNotation(h);
+      var suffix = '';
+      if (window.ChessMoves && window.ChessMoves.isInCheck(s.board, s.turn)) {
+        suffix = window.ChessMoves.isCheckmate(s, s.turn) ? '#' : '+';
+      }
+      notations.push(base + suffix);
+    }
+    return notations;
   }
 
   // ── 힌트 하이라이트 ───────────────────────────────────────
@@ -440,6 +469,7 @@
     onSquareClick,
     showHint,
     historyEntryToNotation,   // 리뷰 모드 기보 표기에서 재사용
+    buildNotations,           // 체크(+)/체크메이트(#) 접미사 포함 기보 리스트
     PIECE_SVG,   // 에디터 팔레트 등에서 재사용
   };
 

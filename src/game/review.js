@@ -20,6 +20,7 @@
   let _states = [];   // 시점별 상태: _states[i] = i수까지 둔 포지션
   let _index  = 0;    // 현재 보고 있는 시점 (0 = 시작 포지션)
   let _total  = 0;    // 전체 수
+  let _notations = [];   // 체크(+)/체크메이트(#) 접미사 포함 기보 (history와 같은 길이)
 
   // ── 시점별 상태 빌드 (undoLastRound와 같은 리플레이 패턴) ──
   function buildStates(finalState, startState) {
@@ -48,8 +49,10 @@
     const game = window.ChessGame.getState();
     if (!game || _active) return;
 
-    _states = buildStates(game, window.ChessGame.getStartState());
+    const startState = window.ChessGame.getStartState();
+    _states = buildStates(game, startState);
     _total  = game.history.length;
+    _notations = window.ChessRenderer.buildNotations(startState, game.history);
     _active = true;
 
     document.getElementById('gameover-modal').style.display = 'none';
@@ -76,6 +79,7 @@
     _states = [];
     _index  = 0;
     _total  = 0;
+    _notations = [];
 
     document.removeEventListener('keydown', onKeyDown);
     document.getElementById('review-bar').style.display = 'none';
@@ -144,7 +148,7 @@
 
   function reviewMoveSpan(entry, idx) {
     if (!entry) return '<span style="flex:1"></span>';
-    const notation = window.ChessRenderer.historyEntryToNotation(entry);
+    const notation = _notations[idx];
     const isActiveMove = (idx === _index - 1);
     return '<span class="review-move' + (isActiveMove ? ' active' : '') + '"' +
       ' data-idx="' + idx + '" style="flex:1">' + notation + '</span>';
