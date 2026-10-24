@@ -131,6 +131,28 @@ console.log('\n[5] 원본 history 보존');
   check('buildNotations 후 history 불변', JSON.stringify(state.history) === histBefore);
 }
 
+// ═══ 6. 기보 행 구성 — 흑 선수면 '1...' 행 ═════════════════════
+console.log('\n[6] 기보 행 구성 (buildMoveRows)');
+{
+  const { buildMoveRows } = window.ChessRenderer;
+  const rowsW = buildMoveRows(null, 3);
+  check('백 선수: 1. (0,1) / 2. (2,-)',
+    JSON.stringify(rowsW) === JSON.stringify([
+      { label: '1.', white: 0, black: 1 },
+      { label: '2.', white: 2, black: -1 },
+    ]));
+
+  const blackStart = { turn: 'black', fullMoveNumber: 1 };
+  const rowsB = buildMoveRows(blackStart, 4);
+  check("흑 선수: 1... (-,0) / 2. (1,2) / 3. (3,-)",
+    JSON.stringify(rowsB) === JSON.stringify([
+      { label: '1...', white: -1, black: 0 },
+      { label: '2.',   white: 1,  black: 2 },
+      { label: '3.',   white: 3,  black: -1 },
+    ]));
+  check('흑 선수라도 수가 없으면 행 없음', buildMoveRows(blackStart, 0).length === 0);
+}
+
 // ── 결과 ────────────────────────────────────────────────────
 console.log('\n──────────────────────────────');
 console.log('PASS ' + pass + ' / FAIL ' + fail);

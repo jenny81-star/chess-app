@@ -368,28 +368,53 @@
     var lastIdx = history.length - 1;
     var startState = (window.ChessGame && window.ChessGame.getStartState) ? window.ChessGame.getStartState() : null;
     var notations = buildNotations(startState, history);
+    var moveRows = buildMoveRows(startState, history.length);
+    var numWidth = moveRowsNumWidth(moveRows);
 
-    for (var i = 0; i < history.length; i += 2) {
-      var moveNum    = Math.floor(i / 2) + 1;
-      var isLastWhite = (i === lastIdx);
-      var isLastBlack = (i + 1 === lastIdx);
+    var moveSpan = function (idx) {
+      if (idx < 0) return '<span style="flex:1"></span>';
+      return '<span style="flex:1;' + (idx === lastIdx ? 'color:var(--gold-light);font-weight:600' : 'color:var(--text-primary)') + '">' +
+        notationToHTML(notations[idx]) + '</span>';
+    };
 
-      var whiteStr = notationToHTML(notations[i]);
-      var blackStr = (i + 1 < history.length) ? notationToHTML(notations[i + 1]) : '';
-
+    moveRows.forEach(function (row) {
       rows.push(
         '<div class="move-row" style="display:flex;gap:4px;padding:2px 4px;font-family:var(--font-mono);font-size:12px">' +
-          '<span style="color:var(--text-muted);min-width:24px">' + moveNum + '.</span>' +
-          '<span style="flex:1;' + (isLastWhite ? 'color:var(--gold-light);font-weight:600' : 'color:var(--text-primary)') + '">' + whiteStr + '</span>' +
-          '<span style="flex:1;' + (isLastBlack ? 'color:var(--gold-light);font-weight:600' : 'color:var(--text-primary)') + '">' + blackStr + '</span>' +
+          '<span style="color:var(--text-muted);min-width:' + numWidth + 'px">' + row.label + '</span>' +
+          moveSpan(row.white) +
+          moveSpan(row.black) +
         '</div>'
       );
-    }
+    });
 
     var savedScrollY = window.scrollY;
     historyEl.innerHTML = rows.join('');
     window.scrollTo(0, savedScrollY);
     historyEl.scrollTop = historyEl.scrollHeight;
+  }
+
+  // ── 기보 행 구성: [{ label, white, black }] (white/black = history 인덱스, 없으면 -1) ──
+  // 흑이 먼저 두는 포지션(기물 배치 모드)이면 첫 행은 '1...' + 흑 수만 둔다.
+  // 그래야 흑의 수가 백 칸을 차지하지 않고, 이후 행도 백·흑 짝이 맞는다.
+  function buildMoveRows(startState, count) {
+    var rows = [];
+    var num = (startState && startState.fullMoveNumber) || 1;
+    var i = 0;
+    if (startState && startState.turn === 'black' && count > 0) {
+      rows.push({ label: num + '...', white: -1, black: 0 });
+      num++;
+      i = 1;
+    }
+    for (; i < count; i += 2, num++) {
+      rows.push({ label: num + '.', white: i, black: i + 1 < count ? i + 1 : -1 });
+    }
+    return rows;
+  }
+
+  // 번호 칸 너비: '1...'처럼 긴 라벨이 있으면 모든 행을 같이 넓혀 열을 맞춘다
+  function moveRowsNumWidth(rows) {
+    var maxLen = rows.reduce(function (m, r) { return Math.max(m, r.label.length); }, 0);
+    return Math.max(24, maxLen * 8);
   }
 
   function historyEntryToNotation(entry) {
@@ -492,6 +517,8 @@
     showHint,
     historyEntryToNotation,   // 리뷰 모드 기보 표기에서 재사용
     buildNotations,           // 체크(+/#) + 품질(!/?) 접미사 포함 기보 리스트
+    buildMoveRows,            // 기보 행 구성 (흑 선수면 '1...' 행) — 리뷰 모드에서 재사용
+    moveRowsNumWidth,
     notationToHTML,           // 품질 기호를 색상 span으로 감싼 HTML
     updateMoveHistory,        // 품질 분석 완료 시 기보 패널만 갱신 (quality.js)
     PIECE_SVG,   // 에디터 팔레트 등에서 재사용

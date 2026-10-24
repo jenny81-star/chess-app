@@ -125,14 +125,15 @@
 
     const history = _states[_total].history;
     const rows = [];
+    const moveRows = window.ChessRenderer.buildMoveRows(_states[0], history.length);
+    const numWidth = window.ChessRenderer.moveRowsNumWidth(moveRows);
 
-    for (let i = 0; i < history.length; i += 2) {
-      const moveNum = Math.floor(i / 2) + 1;
+    for (const row of moveRows) {
       rows.push(
         '<div class="move-row" style="display:flex;gap:4px;padding:2px 4px;font-family:var(--font-mono);font-size:12px">' +
-          '<span style="color:var(--text-muted);min-width:24px">' + moveNum + '.</span>' +
-          reviewMoveSpan(history[i], i) +
-          reviewMoveSpan(history[i + 1], i + 1) +
+          '<span style="color:var(--text-muted);min-width:' + numWidth + 'px">' + row.label + '</span>' +
+          reviewMoveSpan(history[row.white], row.white) +
+          reviewMoveSpan(history[row.black], row.black) +
         '</div>'
       );
     }
