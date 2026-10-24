@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const { createInitialState, cloneState, applyMove, toFEN } = window.ChessBoard;
+  const { createInitialState, cloneState, applyMove, positionKey, toFEN } = window.ChessBoard;
   const {
     getLegalMoves,
     getAllLegalMoves,
@@ -329,6 +329,7 @@
         history:         gameState.history,
         capturedPieces:  gameState.capturedPieces,
         status:          gameState.status,
+        drawReason:      gameState.drawReason || null,
         startPosition:   startState,   // 커스텀 시작 포지션 (표준 시작이면 null)
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
@@ -361,12 +362,17 @@
         history:         data.history || [],
         capturedPieces:  data.capturedPieces || { white: [], black: [] },
         status:          data.status || 'playing',
+        drawReason:      data.drawReason || null,
         difficulty:      data.difficulty || '중급',
         mode:            data.mode || 'ai',  // 구버전 저장 데이터는 AI 대전으로 간주
       };
 
       // 커스텀 시작 포지션 복원 (구버전 저장에는 없음 → 표준 시작으로 간주)
       startState = data.startPosition || null;
+      if (startState && !startState.positionKeys) startState.positionKeys = [positionKey(startState)];
+
+      // 3회 동형 판정용 포지션 기록은 저장하지 않고 기보를 리플레이해 복원한다
+      gameState.positionKeys = replayHistory(gameState.history).positionKeys;
 
       selectedDifficulty = gameState.difficulty;
       selectedMode = gameState.mode;
@@ -407,10 +413,15 @@
       lose:        { title: '😢 아쉬워요...', sub: '다시 도전해볼까요?' },
       stalemate:   { title: '🤝 무승부',     sub: '스테일메이트!' },
       draw:        { title: '🤝 무승부',     sub: '50수 규칙으로 무승부!' },
+      repetition:  { title: '🤝 무승부',     sub: '같은 포지션이 3번 나와서 무승부!' },
+      insufficient:{ title: '🤝 무승부',     sub: '체크메이트할 기물이 부족해서 무승부!' },
       // 2인 대전 전용 결과
       'white-win': { title: '🎉 백 승리!',   sub: '백 플레이어가 이겼어요!' },
       'black-win': { title: '🎉 흑 승리!',   sub: '흑 플레이어가 이겼어요!' },
     };
+    if (result === 'draw' && gameState && messages[gameState.drawReason]) {
+      result = gameState.drawReason;
+    }
     const msg = messages[result] || messages.lose;
 
     // 2인 대전에서는 "난이도 변경" 대신 "메뉴로" 표시
@@ -491,6 +502,19 @@
 
   // ─── 무르기 ──────────────────────────────────────────────────
 
+  // 시작 포지션(커스텀이면 startState)에서 history를 순서대로 적용한 상태
+  function replayHistory(history) {
+    let state = startState ? cloneState(startState) : createInitialState();
+    for (const h of history) {
+      const move = { from: h.from, to: h.to };
+      if (h.castling)  move.castling  = h.castling;
+      if (h.enPassant) move.enPassant = h.enPassant;
+      if (h.promotion) move.promotion = h.promotion;
+      state = applyMove(state, move);
+    }
+    return state;
+  }
+
   function undoLastRound() {
     if (window.ChessReview && window.ChessReview.isActive()) return;
     if (!gameState || gameState.history.length < 1) return;
@@ -503,17 +527,9 @@
     const movesToReplay = gameState.history.slice(0, -undoCount);
 
     // 커스텀 포지션(기물 배치 모드)에서 시작한 게임은 그 포지션부터 리플레이
-    let state = startState ? cloneState(startState) : createInitialState();
+    let state = replayHistory(movesToReplay);
     state.difficulty = gameState.difficulty;
     state.mode       = gameState.mode;
-
-    for (const h of movesToReplay) {
-      const move = { from: h.from, to: h.to };
-      if (h.castling)  move.castling  = h.castling;
-      if (h.enPassant) move.enPassant = h.enPassant;
-      if (h.promotion) move.promotion = h.promotion;
-      state = applyMove(state, move);
-    }
 
     // 리플레이로 새로 만들어진 엔트리에 기존 품질 분석 결과를 보존 (재분석 방지)
     state.history.forEach((h, i) => {

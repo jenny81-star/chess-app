@@ -88,6 +88,8 @@
   }
 
   function computeRankedMoves(state, depth, color) {
+    // 탐색 노드마다 포지션 키를 만들고 복사하지 않도록 비운다 (3회 동형은 실제 대국에서만 판정)
+    if (state.positionKeys) state = { ...state, positionKeys: null };
     const isMaximizing = color === 'white';
     const moves = getAllLegalMoves(state, color);
     if (moves.length === 0) return [];

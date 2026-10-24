@@ -39,7 +39,7 @@
       board[6][col] = { type: 'P',           color: 'white' };
       board[7][col] = { type: BACK_ROW[col], color: 'white' };
     }
-    return {
+    const state = {
       board,
       turn: 'white',
       castlingRights: {
@@ -57,6 +57,8 @@
       difficulty:      '중급',
       mode:            'ai',      // 'ai' | '2p'
     };
+    state.positionKeys = [positionKey(state)];
+    return state;
   }
 
   function cloneState(state) {
@@ -73,8 +75,11 @@
         black: state.capturedPieces.black.map(p => ({ ...p })),
       },
       status:     state.status,
+      drawReason: state.drawReason || null,
       difficulty: state.difficulty,
       mode:       state.mode || 'ai',
+      // AI 탐색용 상태는 positionKeys를 null로 비워 복사 비용을 아낀다
+      positionKeys: state.positionKeys ? state.positionKeys.slice() : null,
     };
   }
 
@@ -89,7 +94,7 @@
     };
     const wKingHome = has(7, 4, 'K', 'white');   // e1
     const bKingHome = has(0, 4, 'K', 'black');   // e8
-    return {
+    const state = {
       board: b,
       turn: options.turn === 'black' ? 'black' : 'white',
       castlingRights: {
@@ -107,6 +112,8 @@
       difficulty:      options.difficulty || '중급',
       mode:            options.mode || 'ai',
     };
+    state.positionKeys = [positionKey(state)];
+    return state;
   }
 
   // ─── 이동 적용 ───────────────────────────────────────────
@@ -166,6 +173,7 @@
     });
 
     next.turn = piece.color === 'white' ? 'black' : 'white';
+    if (next.positionKeys) next.positionKeys.push(positionKey(next));
     return next;
   }
 
@@ -197,6 +205,34 @@
         if (tr === 0 && tc === 0) rights.blackQueenSide = false;
       }
     }
+  }
+
+  // ─── 포지션 키 (3회 동형 판정용) ──────────────────────────
+  // 기물 배치 + 차례 + 캐슬링 권리 + 앙파상 가능 칸.
+  // 앙파상 칸은 실제로 잡을 수 있는 폰이 옆에 있을 때만 포함한다
+  // (FIDE 기준: 앙파상이 불가능하면 같은 포지션으로 본다).
+  function positionKey(state) {
+    const { board, turn, castlingRights: cr, enPassantTarget: ep } = state;
+    let key = '';
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        key += p ? (p.color === 'white' ? p.type : p.type.toLowerCase()) : '.';
+      }
+    }
+    key += turn === 'white' ? 'w' : 'b';
+    key += (cr.whiteKingSide ? 'K' : '') + (cr.whiteQueenSide ? 'Q' : '') +
+           (cr.blackKingSide ? 'k' : '') + (cr.blackQueenSide ? 'q' : '');
+    if (ep) {
+      const pawnRow = turn === 'white' ? ep[0] + 1 : ep[0] - 1;
+      const canCapture = [-1, 1].some(dc => {
+        const c = ep[1] + dc;
+        const p = inBounds(pawnRow, c) && board[pawnRow][c];
+        return p && p.type === 'P' && p.color === turn;
+      });
+      if (canCapture) key += 'e' + ep[0] + ep[1];
+    }
+    return key;
   }
 
   // ─── FEN ─────────────────────────────────────────────────
@@ -239,6 +275,7 @@
     createStateFromBoard,
     cloneState,
     applyMove,
+    positionKey,
     toFEN,
   };
 })();

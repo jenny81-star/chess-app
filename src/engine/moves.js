@@ -235,13 +235,48 @@
     return !isInCheck(state.board, color) && getAllLegalMoves(state, color).length === 0;
   }
 
+  // 기물 부족 무승부: 킹 vs 킹, 킹+비숍/나이트 1개 vs 킹, 킹+나이트 2개 vs 킹,
+  // 킹+비숍들 vs 킹(+비숍들)에서 모든 비숍이 같은 색 칸에 있는 경우
+  function isInsufficientMaterial(board) {
+    const pieces = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (p && p.type !== 'K') pieces.push({ type: p.type, color: p.color, r, c });
+      }
+    }
+    if (pieces.length === 0) return true;
+    if (pieces.length === 1) return pieces[0].type === 'B' || pieces[0].type === 'N';
+    if (pieces.length === 2 &&
+        pieces.every(p => p.type === 'N' && p.color === pieces[0].color)) return true;
+    if (pieces.every(p => p.type === 'B')) {
+      const shade = (pieces[0].r + pieces[0].c) % 2;
+      return pieces.every(p => (p.r + p.c) % 2 === shade);
+    }
+    return false;
+  }
+
+  // 현재 포지션이 지금까지 3번 이상 나왔는지 (positionKeys 마지막이 현재 포지션)
+  function isThreefoldRepetition(state) {
+    const keys = state.positionKeys;
+    if (!keys || keys.length < 5) return false;
+    const current = keys[keys.length - 1];
+    let count = 0;
+    for (const k of keys) if (k === current) count++;
+    return count >= 3;
+  }
+
+  // 무승부(status 'draw')일 때 drawReason: 'insufficient' | 'repetition' | 'fifty'
   function updateGameStatus(state) {
     const { turn } = state;
-    if (isCheckmate(state, turn))       return { ...state, status: 'checkmate' };
-    if (isStalemate(state, turn))       return { ...state, status: 'stalemate' };
-    if (state.halfMoveClock >= 100)     return { ...state, status: 'draw' };
-    if (isInCheck(state.board, turn))   return { ...state, status: 'check' };
-    return { ...state, status: 'playing' };
+    const draw = reason => ({ ...state, status: 'draw', drawReason: reason });
+    if (isCheckmate(state, turn))         return { ...state, status: 'checkmate', drawReason: null };
+    if (isStalemate(state, turn))         return { ...state, status: 'stalemate', drawReason: null };
+    if (isInsufficientMaterial(state.board)) return draw('insufficient');
+    if (isThreefoldRepetition(state))     return draw('repetition');
+    if (state.halfMoveClock >= 100)       return draw('fifty');
+    if (isInCheck(state.board, turn))     return { ...state, status: 'check', drawReason: null };
+    return { ...state, status: 'playing', drawReason: null };
   }
 
   // ─── 전역 노출 ───────────────────────────────────────────
@@ -252,6 +287,8 @@
     getAllLegalMoves,
     isCheckmate,
     isStalemate,
+    isInsufficientMaterial,
+    isThreefoldRepetition,
     updateGameStatus,
   };
 })();
