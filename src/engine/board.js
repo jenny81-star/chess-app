@@ -77,6 +77,7 @@
       status:     state.status,
       drawReason: state.drawReason || null,
       difficulty: state.difficulty,
+      level:      state.level,
       mode:       state.mode || 'ai',
       // AI 탐색용 상태는 positionKeys를 null로 비워 복사 비용을 아낀다
       positionKeys: state.positionKeys ? state.positionKeys.slice() : null,
@@ -110,6 +111,7 @@
       capturedPieces:  { white: [], black: [] },
       status:          'playing',
       difficulty:      options.difficulty || '중급',
+      level:           options.level,
       mode:            options.mode || 'ai',
     };
     state.positionKeys = [positionKey(state)];

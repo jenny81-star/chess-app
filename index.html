@@ -61,6 +61,14 @@
           <span class="label">마스터</span>
           <span class="desc">최강 AI에 도전!</span>
         </div>
+        <div class="level-picker" id="menu-level-picker">
+          <div class="level-picker-head">
+            <span class="level-picker-title">세부 레벨</span>
+            <span class="level-picker-value">Lv. <b class="lv-num">9</b> <span class="lv-max">/ 20</span></span>
+          </div>
+          <input type="range" class="level-slider" min="1" max="20" step="1" value="9" aria-label="AI 레벨 (1~20)">
+          <div class="level-picker-scale"><span>1 · 쉬움</span><span>20 · 최강</span></div>
+        </div>
       </div>
 
       <div class="menu-buttons">
@@ -87,7 +95,13 @@
 
       <!-- 체스판 영역 -->
       <div id="board-area">
+        <div id="opening-name" class="opening-name" aria-live="polite"></div>
         <div id="board-wrapper">
+          <!-- 평가 막대 (백 기준, 흰 부분이 길수록 백 우세) -->
+          <div id="eval-bar" class="eval-bar" role="img" aria-label="평가 막대">
+            <div id="eval-bar-fill" class="eval-bar-fill"></div>
+            <span id="eval-bar-label" class="eval-bar-label">0.0</span>
+          </div>
           <div id="board-with-coords">
             <div id="rank-labels" class="coord-rail rank-rail" aria-hidden="true"></div>
             <div id="board-container">
@@ -100,6 +114,7 @@
         <div id="controls">
           <button class="btn-game" id="btn-hint">💡 힌트</button>
           <button class="btn-game" id="btn-undo">↩ 무르기</button>
+          <button class="btn-game" id="btn-evalbar" title="평가 막대 켜기/끄기">📊 평가</button>
           <button class="btn-game btn-danger" id="btn-resign">🏳 항복</button>
         </div>
 
@@ -229,6 +244,14 @@
         <button class="diff-pill" data-difficulty="고급">고급</button>
         <button class="diff-pill" data-difficulty="마스터">마스터</button>
       </div>
+      <div class="level-picker" id="editor-level-picker">
+        <div class="level-picker-head">
+          <span class="level-picker-title">세부 레벨</span>
+          <span class="level-picker-value">Lv. <b class="lv-num">9</b> <span class="lv-max">/ 20</span></span>
+        </div>
+        <input type="range" class="level-slider" min="1" max="20" step="1" value="9" aria-label="AI 레벨 (1~20)">
+        <div class="level-picker-scale"><span>1 · 쉬움</span><span>20 · 최강</span></div>
+      </div>
       <div class="modal-buttons">
         <button class="btn-game btn-primary" id="btn-editor-start-ai">🤖 AI와 대전</button>
         <button class="btn-game" id="btn-editor-start-free">👥 자유 진행</button>
@@ -303,11 +326,14 @@
   <script src="src/engine/evaluator.js"></script>
   <script src="src/engine/ai.js"></script>
   <script src="src/engine/stockfish.js"></script>
+  <script src="src/data/openings-data.js"></script>
+  <script src="src/game/openings.js"></script>
   <script src="src/game/quality.js"></script>
   <script src="src/game/game.js"></script>
   <script src="src/ui/renderer.js"></script>
   <script src="src/ui/animator.js"></script>
   <script src="src/ui/effects.js"></script>
+  <script src="src/ui/evalbar.js"></script>
   <script src="src/game/review.js"></script>
   <script src="src/ui/editor.js"></script>
 

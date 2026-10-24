@@ -14,9 +14,14 @@
 - **빌드 도구**: 없음 (index.html 직접 실행)
 - **배포**: GitHub → Vercel 자동배포
 - **저장**: localStorage (게임 저장/불러오기)
-- **외부 라이브러리**: Stockfish.js 18 lite-single (WASM, GPLv3) — 힌트·수 품질 분석 전용. 상대 AI는 직접 구현한 ai.js 유지
-  - 파일: `assets/stockfish/` (라이선스: `assets/stockfish/Copying.txt`), 브리지: `src/engine/stockfish.js`
-  - 워커를 못 띄우는 환경(file:// 등)에서는 내장 엔진으로 자동 대체
+- **외부 라이브러리 / 데이터**:
+  - Stockfish.js 18 lite-single (WASM, GPLv3) — 상대 AI · 힌트 · 수 품질 · 평가 막대
+    - 파일: `assets/stockfish/` (라이선스: `assets/stockfish/Copying.txt`), 브리지: `src/engine/stockfish.js`
+    - 워커 2개: analysis(분석, 항상 Skill 20) / opponent(상대 AI, 레벨별 설정)
+    - 워커를 못 띄우는 환경(file:// 등, Playwright 테스트 포함)에서는 내장 엔진(ai.js)으로 자동 대체
+  - Lichess chess-openings (CC0) — 오프닝 이름. 원본 `tools/openings-src/`, 변환 `node tools/build-openings.js` → `src/data/openings-data.js`
+- **난이도**: 레벨 1~20 (`ai.js`의 LEVEL_* 표) + 5단계 이름(입문 1-4 / 초급 5-8 / 중급 9-12 / 고급 13-16 / 마스터 17-20)
+  - 낮은 레벨은 Skill Level + 깊이 제한 + 실수 주입. 내장 엔진 상대로 실측해 조정함
 
 ## 프로젝트 구조
 ```

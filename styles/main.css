@@ -142,6 +142,50 @@ button { cursor: pointer; font-family: inherit; }
   color: var(--text-muted);
 }
 
+/* ─── 세부 레벨 슬라이더 (1~20) ─────────────────────── */
+.level-picker {
+  background: var(--bg-card);
+  border: 1px solid var(--gold-dark);
+  border-radius: 8px;
+  padding: 12px 18px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.level-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.level-picker-title {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.level-picker-value {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--gold-mid);
+}
+.level-picker-value .lv-num {
+  font-size: 18px;
+  color: var(--gold-light);
+}
+.level-picker-value .lv-max { color: var(--text-muted); font-size: 12px; }
+.level-slider {
+  width: 100%;
+  accent-color: var(--gold-mid);
+  cursor: pointer;
+}
+.level-picker-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+#editor-level-picker { margin-bottom: 18px; }
+
 /* ─── 게임 모드 선택 (AI 대전 / 2인 대전) ─────────────── */
 .mode-list {
   display: flex;
@@ -315,6 +359,63 @@ button { cursor: pointer; font-family: inherit; }
     inset 0 0 30px rgba(0, 0, 0, 0.4);
 }
 
+/* 게임 화면: 평가 막대 + 체스판을 가로로 */
+#board-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* ─── 평가 막대 ─────────────────────────────────────── */
+.eval-bar {
+  --eval-bar-w: 24px;
+  position: relative;
+  width: var(--eval-bar-w);
+  flex: 0 0 var(--eval-bar-w);
+  background: #2b2b2b;           /* 흑 몫 (위) */
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.5);
+}
+.eval-bar.hidden { display: none; }
+.eval-bar-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 50%;
+  background: #f0ede4;           /* 백 몫 (아래) */
+  transition: height 0.45s ease;
+}
+.eval-bar-label {
+  position: absolute;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  pointer-events: none;
+}
+.eval-bar-label.white-adv { bottom: 4px; color: #2b2b2b; }
+.eval-bar-label.black-adv { top: 4px;    color: #f0ede4; }
+
+#btn-evalbar.active {
+  border-color: var(--gold-light);
+  color: var(--gold-light);
+}
+
+/* ─── 오프닝 이름 (보드 위) ───────────────────────────── */
+.opening-name {
+  min-height: 18px;
+  max-width: min(calc(100vh - 200px), calc(100vw - 360px), 640px);
+  font-size: 13px;
+  color: var(--gold-mid);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #board-with-coords {
   display: flex;
   flex-direction: column;
@@ -340,6 +441,10 @@ button { cursor: pointer; font-family: inherit; }
 #editor-board-container {
   width: min(calc(100vh - 200px), calc(100vw - 360px), 640px);
   aspect-ratio: 1;
+}
+/* 게임 화면은 평가 막대(24px + 간격 12px)만큼 보드를 줄인다 */
+#board-container {
+  width: min(calc(100vh - 220px), calc(100vw - 396px), 640px);
 }
 
 #board,
@@ -1002,6 +1107,10 @@ button { cursor: pointer; font-family: inherit; }
   #editor-board-container {
     width: min(90vw, calc(100vh - 300px));
   }
+  #board-container {
+    width: min(calc(90vw - 36px), calc(100vh - 320px));
+  }
+  .opening-name { max-width: 90vw; }
   #move-history-panel {
     min-width: 200px;
     flex: 1;

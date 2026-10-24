@@ -247,6 +247,7 @@
     updateCapturedPieces(_state);
     updateMaterialAdvantage(_state);
     updateMoveHistory(_state);
+    if (window.ChessEvalBar) window.ChessEvalBar.update(_state);
     window.ChessGame.updatePlayerCards();
 
     // 방금 둔 수 품질 분석 예약 (백그라운드 — AI 턴이 시작되면 큐잉됨)
@@ -508,6 +509,7 @@
     updateCapturedPieces(state);
     updateMaterialAdvantage(state);
     updateMoveHistory(state);
+    if (window.ChessEvalBar) window.ChessEvalBar.update(state);
   }
 
   // ── 전역 노출 ─────────────────────────────────────────────

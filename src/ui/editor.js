@@ -22,6 +22,7 @@
   let selectedTool = null;      // { kind:'piece', color, type } | { kind:'eraser' } | null
   let firstTurn    = 'white';   // 선공
   let _domReady    = false;
+  let _levelPicker = null;      // 대국 방식 모달의 세부 레벨 슬라이더
 
   function createEmptyBoard() {
     return Array.from({ length: 8 }, () => Array(8).fill(null));
@@ -145,9 +146,13 @@
       document.querySelectorAll('#editor-diff-row .diff-pill').forEach(p =>
         p.classList.toggle('selected', p === pill));
     });
+    // 세부 레벨 슬라이더 — 알약 버튼(5단계)과 서로 동기화
+    _levelPicker = root.ChessGame.bindLevelPicker(
+      document.getElementById('editor-level-picker'),
+      document.querySelectorAll('#editor-diff-row .diff-pill'));
     document.getElementById('btn-editor-start-ai').addEventListener('click', () => {
-      const sel = document.querySelector('#editor-diff-row .diff-pill.selected');
-      startGame('ai', sel ? sel.dataset.difficulty : '중급');
+      const level = _levelPicker.getLevel();
+      startGame('ai', root.ChessAI.levelToCategory(level), level);
     });
     document.getElementById('btn-editor-start-free').addEventListener('click', () => {
       startGame('2p');
@@ -309,12 +314,13 @@
     document.getElementById('editor-start-modal').style.display = 'flex';
   }
 
-  function startGame(mode, difficulty) {
+  function startGame(mode, difficulty, level) {
     document.getElementById('editor-start-modal').style.display = 'none';
     const state = createStateFromBoard(editorBoard, {
       turn:       firstTurn,
       mode:       mode,
       difficulty: difficulty || '중급',
+      level:      level,
     });
     root.ChessGame.startFromPosition(state);
   }

@@ -14,7 +14,8 @@
     isStalemate,
     updateGameStatus,
   } = window.ChessMoves;
-  const { getBestMove, getHintMove, analyzePosition, DIFFICULTY_CONFIG } = window.ChessAI;
+  const { getBestMove, getHintMove, analyzePosition, DIFFICULTY_CONFIG,
+          CATEGORY_DEFAULT_LEVEL, levelToCategory, clampLevel, resolveLevel } = window.ChessAI;
   const { evaluate } = window.ChessEval;
 
   // ─── 상태 ──────────────────────────────────────────────────
@@ -48,19 +49,40 @@
   const difficultyBadge = document.getElementById('difficulty-badge');
 
   // ─── 난이도 선택 ─────────────────────────────────────────
+  // 5단계 카드(입문~마스터)와 세부 레벨(1~20) 슬라이더를 함께 쓴다.
+  // 카드를 누르면 그 단계의 기본 레벨로, 슬라이더를 움직이면 해당 단계 카드가 선택된다.
   let selectedDifficulty = '중급';
+  let selectedLevel      = CATEGORY_DEFAULT_LEVEL['중급'];
+
+  // 레벨 슬라이더 + 단계 버튼(data-difficulty) 묶기 → { setLevel, getLevel }
+  function bindLevelPicker(pickerEl, categoryEls, onChange) {
+    const slider = pickerEl.querySelector('.level-slider');
+    const numEl  = pickerEl.querySelector('.lv-num');
+    let level = clampLevel(slider.value);
+
+    function setLevel(lv) {
+      level = clampLevel(lv);
+      slider.value = level;
+      numEl.textContent = level;
+      const cat = levelToCategory(level);
+      categoryEls.forEach(el => el.classList.toggle('selected', el.dataset.difficulty === cat));
+      if (onChange) onChange(level, cat);
+    }
+
+    slider.addEventListener('input', () => setLevel(slider.value));
+    categoryEls.forEach(el => el.addEventListener('click', () =>
+      setLevel(CATEGORY_DEFAULT_LEVEL[el.dataset.difficulty])));
+    setLevel(level);
+    return { setLevel, getLevel: () => level };
+  }
+
+  const menuLevelPicker = bindLevelPicker(
+    document.getElementById('menu-level-picker'),
+    document.querySelectorAll('.difficulty-card'),
+    (level, cat) => { selectedLevel = level; selectedDifficulty = cat; });
 
   // ─── 게임 모드 선택 ('ai' | '2p') ─────────────────────────
   let selectedMode = 'ai';
-
-  document.getElementById('difficulty-list').addEventListener('click', (e) => {
-    const card = e.target.closest('.difficulty-card');
-    if (!card) return;
-
-    document.querySelectorAll('.difficulty-card').forEach(c => c.classList.remove('selected'));
-    card.classList.add('selected');
-    selectedDifficulty = card.dataset.difficulty;
-  });
 
   document.getElementById('mode-list').addEventListener('click', (e) => {
     const card = e.target.closest('.mode-card');
@@ -152,9 +174,15 @@
       return;
     }
 
+    // difficulty(5단계 이름)가 현재 슬라이더 레벨의 단계와 다르면 그 단계의 기본 레벨로
+    const level = levelToCategory(selectedLevel) === difficulty
+      ? selectedLevel
+      : (CATEGORY_DEFAULT_LEVEL[difficulty] || selectedLevel);
+
     startState = null;
     gameState = createInitialState();
-    gameState.difficulty = difficulty;
+    gameState.level = level;
+    gameState.difficulty = levelToCategory(level);
     gameState.mode = mode;
 
     // 이전 게임의 품질 분석 예약 취소
@@ -186,7 +214,8 @@
 
     difficultyBadge.textContent = is2P
       ? '👥 2인 대전'
-      : getDifficultyStars(gameState.difficulty) + ' ' + gameState.difficulty;
+      : getDifficultyStars(gameState.difficulty) + ' ' + gameState.difficulty +
+        ' · Lv.' + resolveLevel(gameState);
 
     document.querySelector('#black-player-card .player-name').textContent =
       is2P ? '흑 플레이어' : 'AI (흑)';
@@ -319,6 +348,7 @@
         version:         '1.0',
         savedAt:         new Date().toISOString(),
         difficulty:      gameState.difficulty,
+        level:           resolveLevel(gameState),
         mode:            gameState.mode || 'ai',
         board:           gameState.board,
         turn:            gameState.turn,
@@ -364,6 +394,7 @@
         status:          data.status || 'playing',
         drawReason:      data.drawReason || null,
         difficulty:      data.difficulty || '중급',
+        level:           data.level || null,   // 구버전 저장 → 아래에서 단계 기본 레벨로
         mode:            data.mode || 'ai',  // 구버전 저장 데이터는 AI 대전으로 간주
       };
 
@@ -374,10 +405,9 @@
       // 3회 동형 판정용 포지션 기록은 저장하지 않고 기보를 리플레이해 복원한다
       gameState.positionKeys = replayHistory(gameState.history).positionKeys;
 
-      selectedDifficulty = gameState.difficulty;
+      gameState.level = resolveLevel(gameState);
+      menuLevelPicker.setLevel(gameState.level);   // selectedLevel/selectedDifficulty 동기화
       selectedMode = gameState.mode;
-      document.querySelectorAll('.difficulty-card').forEach(c =>
-        c.classList.toggle('selected', c.dataset.difficulty === selectedDifficulty));
       updateModeMenuUI();
       selectedSquare = null;
       legalMovesCache = [];
@@ -529,6 +559,7 @@
     // 커스텀 포지션(기물 배치 모드)에서 시작한 게임은 그 포지션부터 리플레이
     let state = replayHistory(movesToReplay);
     state.difficulty = gameState.difficulty;
+    state.level      = gameState.level;
     state.mode       = gameState.mode;
 
     // 리플레이로 새로 만들어진 엔트리에 기존 품질 분석 결과를 보존 (재분석 방지)
@@ -658,6 +689,7 @@
     setAIThinking,
     showToast,
     showMenu,
+    bindLevelPicker,   // 에디터 대국 방식 모달에서 재사용
     startFromPosition,
     getState:          () => gameState,
     setState:          (s) => { gameState = s; },

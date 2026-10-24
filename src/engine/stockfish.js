@@ -1,11 +1,16 @@
 /**
  * stockfish.js — Stockfish(WASM, lite single-threaded) 웹 워커 브리지
  * 전역: window.ChessStockfish
- * 의존: window.ChessBoard (toFEN)
+ * 의존(호출 시점): window.ChessBoard (toFEN), window.ChessMoves (getLegalMoves)
  *
- * 힌트·수 품질 분석 전용 (상대 AI는 기존 ai.js 그대로 — 아이가 이길 수 있는 난이도 유지).
+ * 엔진 인스턴스(워커) 두 개를 쓴다:
+ *   analysis — 힌트 · 수 품질 · 평가 막대 (항상 Skill Level 20)
+ *   opponent — 상대 AI 착수 (레벨별 Skill Level / 깊이)
+ * UCI 옵션은 워커 전역 상태라, 상대 AI의 약한 설정이 분석에 섞이지 않도록 분리한다.
+ * 작업마다 Skill Level·MultiPV를 다시 지정하는 것도 같은 이유.
+ *
  * 워커를 띄울 수 없는 환경(file:// 실행, 구형 브라우저, 로딩 실패)에서는
- * isReady()가 false가 되고, 호출 측은 내장 엔진으로 대체한다.
+ * isReady()가 false가 되고, 호출 측은 내장 엔진(ai.js)으로 대체한다.
  *
  * 엔진: Stockfish.js 18 (c) Chess.com, LLC / Stockfish 개발팀 — GPLv3
  *       assets/stockfish/Copying.txt 참고
@@ -17,8 +22,12 @@
 
   const ENGINE_PATH     = 'assets/stockfish/stockfish-18-lite-single.js';
   const INIT_TIMEOUT_MS = 15000;   // 7MB wasm 다운로드 + 초기화
-  const JOB_TIMEOUT_MS  = 10000;   // 한 번의 탐색이 이 시간을 넘으면 stop
+  const JOB_TIMEOUT_MS  = 10000;   // 탐색이 이 시간을 넘으면 stop
+  const KILL_GRACE_MS   = 3000;    // stop 후에도 bestmove가 없으면 워커 재시작
   const MATE_SCORE      = 200000;  // ai.js CHECKMATE_SCORE와 같은 스케일
+
+  // 작업 우선순위 (높을수록 먼저)
+  const PRIORITY = { move: 3, hint: 3, eval: 2, quality: 1 };
 
   // ── UCI 변환 (순수 함수 — node 테스트 대상) ──────────────────
   const FILES = 'abcdefgh';
@@ -34,6 +43,17 @@
     const move = { from: sq(uci.slice(0, 2)), to: sq(uci.slice(2, 4)) };
     if (uci.length > 4) move.promotion = uci[4].toUpperCase();
     return move;
+  }
+
+  // UCI 수 → 엔진 합법 수 객체 (castling/enPassant 플래그 포함). 없으면 null.
+  // applyMove가 룩 이동·앙파상 잡기를 이 플래그로 처리하므로 착수에는 반드시 이걸 쓴다.
+  function toLegalMove(state, uci) {
+    const m = uciToMove(uci);
+    if (!m || !root.ChessMoves) return null;
+    const legal = root.ChessMoves.getLegalMoves(state, m.from[0], m.from[1]);
+    return legal.find(l =>
+      l.to[0] === m.to[0] && l.to[1] === m.to[1] &&
+      (l.promotion || null) === (m.promotion || null)) || null;
   }
 
   // "info depth 12 ... multipv 2 score cp -35 ... pv e7e5 g1f3" → { multipv, depth, score, pv }
@@ -53,110 +73,157 @@
     return { depth, multipv, score, pv: t.slice(at('pv') + 1) };
   }
 
-  // ── 워커 관리 ─────────────────────────────────────────────
-  let _worker  = null;
-  let _ready   = false;
-  let _failed  = false;
-  let _readyPromise = null;
-  let _queue   = [];       // 대기 중인 탐색 작업
-  let _current = null;     // 진행 중인 작업 { lines, onLine, finish }
+  // ── 엔진 인스턴스 ─────────────────────────────────────────
+  function createEngine(name) {
+    let worker = null;
+    let ready  = false;
+    let failed = false;        // 이 환경에서 워커 자체가 불가 — 다시 시도하지 않음
+    let readyPromise = null;
+    let queue   = [];          // [{ fen, depth, multipv, skill, searchmoves, priority, tag, resolve, reject }]
+    let current = null;        // 진행 중인 작업 { job, onLine }
 
-  function init() {
-    if (_readyPromise) return _readyPromise;
-    _readyPromise = new Promise(resolve => {
-      const fail = (why) => {
-        if (_ready || _failed) return;
-        _failed = true;
-        console.warn('[Stockfish] 사용 불가 — 내장 엔진으로 대체합니다:', why);
-        try { if (_worker) _worker.terminate(); } catch (e) { /* noop */ }
-        _worker = null;
-        resolve(false);
-      };
-      if (typeof Worker === 'undefined' || (root.location && root.location.protocol === 'file:')) {
-        fail('worker unavailable');
-        return;
-      }
-      const timer = setTimeout(() => fail('init timeout'), INIT_TIMEOUT_MS);
-      try {
-        _worker = new Worker(ENGINE_PATH);
-      } catch (err) {
-        clearTimeout(timer);
-        fail(err && err.message);
-        return;
-      }
-      _worker.onerror = (e) => { clearTimeout(timer); fail(e && e.message || 'worker error'); };
-      _worker.onmessage = (e) => {
-        const line = typeof e.data === 'string' ? e.data : String(e.data);
-        if (!_ready) {
-          if (line === 'uciok') _worker.postMessage('isready');
-          else if (line === 'readyok') {
-            clearTimeout(timer);
-            _ready = true;
-            console.log('[Stockfish] 엔진 준비 완료');
-            resolve(true);
-          }
+    function log(msg, extra) { console.log('[Stockfish:' + name + '] ' + msg, extra || ''); }
+
+    function init() {
+      if (readyPromise) return readyPromise;
+      readyPromise = new Promise(resolve => {
+        const fail = (why, permanent) => {
+          if (ready) return;
+          if (permanent) failed = true;
+          console.warn('[Stockfish:' + name + '] 사용 불가 — 내장 엔진으로 대체합니다:', why);
+          try { if (worker) worker.terminate(); } catch (e) { /* noop */ }
+          worker = null;
+          if (!permanent) readyPromise = null;   // 일시적 실패는 다음 호출 때 재시도
+          resolve(false);
+        };
+        if (failed) { resolve(false); return; }
+        if (typeof Worker === 'undefined' || (root.location && root.location.protocol === 'file:')) {
+          fail('worker unavailable', true);
           return;
         }
-        if (_current) _current.onLine(line);
-      };
-      _worker.postMessage('uci');
-    });
-    return _readyPromise;
-  }
-
-  function isReady() { return _ready; }
-
-  // 준비 완료 여부를 기다림 (실패/불가 시 false)
-  function whenReady() { return init(); }
-
-  function pump() {
-    if (_current || _queue.length === 0 || !_ready) return;
-    const job = _queue.shift();
-    const lines = {};   // multipv → 마지막(가장 깊은) info
-    let timer = null;
-    _current = {
-      onLine(line) {
-        const info = parseInfo(line);
-        if (info) { lines[info.multipv] = info; return; }
-        if (line.indexOf('bestmove') === 0) {
+        const timer = setTimeout(() => fail('init timeout', false), INIT_TIMEOUT_MS);
+        try {
+          worker = new Worker(ENGINE_PATH);
+        } catch (err) {
           clearTimeout(timer);
-          _current = null;
-          const best = line.split(' ')[1];
-          const result = Object.keys(lines).map(Number).sort((a, b) => a - b).map(k => lines[k]);
-          job.resolve({ bestmove: best && best !== '(none)' ? best : null, lines: result });
-          pump();
+          fail(err && err.message, true);
+          return;
         }
-      },
-    };
-    _worker.postMessage('setoption name MultiPV value ' + (job.multipv || 1));
-    _worker.postMessage('position fen ' + job.fen);
-    _worker.postMessage('go depth ' + job.depth + (job.searchmoves ? ' searchmoves ' + job.searchmoves.join(' ') : ''));
-    timer = setTimeout(() => { if (_worker) _worker.postMessage('stop'); }, JOB_TIMEOUT_MS);
+        worker.onerror = (e) => {
+          clearTimeout(timer);
+          if (ready) restart('worker error: ' + (e && e.message));
+          else fail(e && e.message || 'worker error', false);
+        };
+        worker.onmessage = (e) => {
+          const line = typeof e.data === 'string' ? e.data : String(e.data);
+          if (!ready) {
+            if (line === 'uciok') worker.postMessage('isready');
+            else if (line === 'readyok') {
+              clearTimeout(timer);
+              ready = true;
+              log('엔진 준비 완료');
+              resolve(true);
+              pump();
+            }
+            return;
+          }
+          if (current) current.onLine(line);
+        };
+        worker.postMessage('uci');
+      });
+      return readyPromise;
+    }
+
+    // 워커가 응답하지 않거나 죽었을 때: 진행/대기 작업을 모두 실패 처리하고 재시작 준비
+    function restart(why) {
+      console.warn('[Stockfish:' + name + '] 워커 재시작:', why);
+      try { if (worker) worker.terminate(); } catch (e) { /* noop */ }
+      worker = null;
+      ready = false;
+      readyPromise = null;
+      const pending = (current ? [current.job] : []).concat(queue);
+      current = null;
+      queue = [];
+      pending.forEach(j => j.reject(new Error('stockfish restarted: ' + why)));
+      init();
+    }
+
+    function pump() {
+      if (current || queue.length === 0 || !ready) return;
+      const job = queue.shift();
+      const lines = {};   // multipv → 마지막(가장 깊은) info
+      let stopTimer = null, killTimer = null;
+      current = {
+        job,
+        onLine(line) {
+          const info = parseInfo(line);
+          if (info) { lines[info.multipv] = info; return; }
+          if (line.indexOf('bestmove') === 0) {
+            clearTimeout(stopTimer);
+            clearTimeout(killTimer);
+            current = null;
+            const best = line.split(' ')[1];
+            const result = Object.keys(lines).map(Number).sort((a, b) => a - b).map(k => lines[k]);
+            job.resolve({ bestmove: best && best !== '(none)' ? best : null, lines: result });
+            pump();
+          }
+        },
+      };
+      worker.postMessage('setoption name Skill Level value ' + job.skill);
+      worker.postMessage('setoption name MultiPV value ' + job.multipv);
+      worker.postMessage('position fen ' + job.fen);
+      worker.postMessage('go depth ' + job.depth + (job.searchmoves ? ' searchmoves ' + job.searchmoves.join(' ') : ''));
+      stopTimer = setTimeout(() => {
+        if (worker) worker.postMessage('stop');
+        killTimer = setTimeout(() => restart('no bestmove after stop'), KILL_GRACE_MS);
+      }, JOB_TIMEOUT_MS);
+    }
+
+    // 원시 탐색 → { bestmove(uci), lines: [{ multipv, depth, score(둘 차례 관점), pv }] }
+    function search(fen, opts) {
+      opts = opts || {};
+      if (!ready) return Promise.reject(new Error('stockfish not ready'));
+      return new Promise((resolve, reject) => {
+        const job = {
+          fen,
+          depth:       opts.depth || 12,
+          multipv:     opts.multipv || 1,
+          skill:       opts.skill === undefined ? 20 : opts.skill,
+          searchmoves: opts.searchmoves || null,
+          priority:    opts.priority || 0,
+          tag:         opts.tag || null,
+          resolve, reject,
+        };
+        // 우선순위가 높은 작업 앞에, 같은 우선순위끼리는 들어온 순서대로
+        let i = queue.findIndex(q => q.priority < job.priority);
+        if (i < 0) i = queue.length;
+        queue.splice(i, 0, job);
+        pump();
+      });
+    }
+
+    // 아직 시작하지 않은 같은 태그 작업 취소 (평가 막대: 최신 포지션만 의미 있음)
+    function cancel(tag) {
+      queue = queue.filter(j => {
+        if (j.tag !== tag) return true;
+        j.reject(new Error('cancelled'));
+        return false;
+      });
+    }
+
+    return { init, isReady: () => ready, whenReady: init, search, cancel };
   }
 
-  // 원시 탐색: fen 문자열 기준 → { bestmove(uci), lines: [{ multipv, depth, score(둘 차례 관점), pv }] }
-  function search(fen, opts) {
-    opts = opts || {};
-    if (!_ready) return Promise.reject(new Error('stockfish not ready'));
-    return new Promise(resolve => {
-      // priority: 힌트처럼 사용자가 기다리는 요청은 대기열 맨 앞에
-      _queue[opts.priority ? 'unshift' : 'push']({
-        fen,
-        depth: opts.depth || 12,
-        multipv: opts.multipv || 1,
-        searchmoves: opts.searchmoves || null,
-        resolve,
-      });
-      pump();
-    });
-  }
+  const analysis = createEngine('analysis');
+  const opponent = createEngine('opponent');
 
   // ── 게임 상태 기준 API ─────────────────────────────────────
 
-  // 최선수 (내장 엔진 move 형식) — 힌트용
+  // 최선수 (합법 수 객체) — 힌트용
   async function getBestMove(state, depth) {
-    const res = await search(root.ChessBoard.toFEN(state), { depth: depth || 14, priority: true });
-    return uciToMove(res.bestmove);
+    const res = await analysis.search(root.ChessBoard.toFEN(state),
+      { depth: depth || 14, priority: PRIORITY.hint });
+    return toLegalMove(state, res.bestmove);
   }
 
   // 수 품질 판정용 랭킹: ChessAI.rankMovesSync와 같은 형식 [{ move, score }]
@@ -167,34 +234,71 @@
     depth = depth || 12;
     const fen  = root.ChessBoard.toFEN(state);
     const sign = state.turn === 'white' ? 1 : -1;   // 둘 차례 관점 → 백 기준
-    const res  = await search(fen, { depth, multipv: 2 });
+    const opts = { depth, multipv: 2, priority: PRIORITY.quality };
+    const res  = await analysis.search(fen, opts);
     const ranked = res.lines
       .filter(l => l.pv && l.pv[0])
       .map(l => ({ move: uciToMove(l.pv[0]), score: sign * l.score }));
 
     const playedUci = moveToUci(playedMove);
     if (!ranked.some(r => moveToUci(r.move) === playedUci)) {
-      const one = await search(fen, { depth, multipv: 1, searchmoves: [playedUci] });
+      const one = await analysis.search(fen, { depth, multipv: 1, searchmoves: [playedUci], priority: PRIORITY.quality });
       const line = one.lines[0];
       if (line) ranked.push({ move: uciToMove(playedUci), score: sign * line.score });
     }
     return ranked;
   }
 
+  // 평가 막대용 — 백 기준 점수. 이전 평가 요청 중 시작 안 된 것은 취소(최신 포지션 우선).
+  async function evaluatePosition(state, depth) {
+    analysis.cancel('eval');
+    const sign = state.turn === 'white' ? 1 : -1;
+    const res = await analysis.search(root.ChessBoard.toFEN(state),
+      { depth: depth || 12, priority: PRIORITY.eval, tag: 'eval' });
+    const line = res.lines[0];
+    return line ? sign * line.score : null;
+  }
+
+  // 상대 AI 착수 탐색 (opponent 워커). opts: { skill, depth, multipv }
+  //   → { move: 합법 수 객체 | null, ranked: [{ move, score(백 기준) }] }
+  async function searchOpponent(state, opts) {
+    const sign = state.turn === 'white' ? 1 : -1;
+    const res = await opponent.search(root.ChessBoard.toFEN(state), {
+      depth: opts.depth, skill: opts.skill, multipv: opts.multipv || 1, priority: PRIORITY.move,
+    });
+    const ranked = res.lines
+      .filter(l => l.pv && l.pv[0])
+      .map(l => ({ move: toLegalMove(state, l.pv[0]), score: sign * l.score }))
+      .filter(r => r.move);
+    return { move: toLegalMove(state, res.bestmove), ranked };
+  }
+
   // ─── 전역 노출 ───────────────────────────────────────────
   root.ChessStockfish = {
-    init,
-    isReady,
-    whenReady,
-    search,
+    // 분석 엔진 (힌트·수 품질·평가 막대)
+    init:      analysis.init,
+    isReady:   analysis.isReady,
+    whenReady: analysis.whenReady,
+    search:    analysis.search,
     getBestMove,
     rankForQuality,
-    // 테스트용 순수 함수
+    evaluatePosition,
+    // 상대 AI 엔진
+    initOpponent:      opponent.init,
+    isOpponentReady:   opponent.isReady,
+    whenOpponentReady: opponent.whenReady,
+    searchOpponent,
+    // 순수 함수 (테스트용)
     moveToUci,
     uciToMove,
+    toLegalMove,
     parseInfo,
+    MATE_SCORE,
   };
 
-  // 페이지 로드 시 백그라운드로 엔진 준비 (메뉴 화면에서 미리 받아 둠)
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') init();
+  // 페이지 로드 시 백그라운드로 두 엔진 준비 (메뉴 화면에서 미리 받아 둠 — wasm은 캐시 공유)
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    analysis.init();
+    opponent.init();
+  }
 })();

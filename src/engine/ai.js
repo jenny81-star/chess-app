@@ -24,6 +24,57 @@
     '마스터': { depth: 5, mistakeRate: 0.00, topN: 1, thinkTime: 2000, openingWindow:  50 },
   };
 
+  // ── 레벨 1~20 (Stockfish 상대 AI) ─────────────────────────
+  // skill: Stockfish Skill Level (0~20), depth: 탐색 깊이 제한.
+  // mistakeRate/topN: 이 확률로 상위 N개 후보 중 무작위 수를 둔다 (기존 내장 엔진 방식).
+  //   Skill 0 + 깊이 1만으로도 기존 '초급'과 비슷해서, 아이가 이길 수 있는
+  //   입문~중급 구간은 실수 주입으로 더 약하게 만든다.
+  //   실측(브라우저, 기존 내장 엔진 상대 10판): Lv9 ≈ 기존 '중급'이 되도록 맞춘 값.
+  // thinkTime: 최소 생각 시간(ms) — 너무 즉시 두면 어색해서.
+  // category: 메뉴·뱃지·내장 엔진 대체(DIFFICULTY_CONFIG)에 쓰는 5단계 이름.
+  //                    Lv  1    2    3    4    5    6    7    8    9   10   11   12   13  14  15  16  17  18  19  20
+  const LEVEL_SKILLS  = [   0,   0,   0,   0,   0,   1,   1,   1,   1,   2,   3,   3,   5,  7,  9, 11, 13, 15, 17, 20];
+  const LEVEL_DEPTHS  = [   1,   1,   1,   1,   1,   1,   2,   2,   2,   2,   2,   3,   3,  4,  5,  6,  8, 10, 12, 16];
+  const LEVEL_MISTAKE = [ .45, .40, .35, .30, .26, .23, .21, .19, .15, .13, .10, .08, .04,  0,  0,  0,  0,  0,  0,  0];
+  const LEVEL_TOPN    = [   8,   8,   8,   7,   6,   6,   5,   5,   4,   4,   4,   3,   3,  1,  1,  1,  1,  1,  1,  1];
+  const LEVEL_MIN = 1, LEVEL_MAX = 20;
+  const CATEGORY_DEFAULT_LEVEL = { '입문': 2, '초급': 6, '중급': 9, '고급': 14, '마스터': 20 };
+
+  function clampLevel(level) {
+    const n = Math.round(Number(level));
+    if (!isFinite(n)) return CATEGORY_DEFAULT_LEVEL['중급'];
+    return Math.max(LEVEL_MIN, Math.min(LEVEL_MAX, n));
+  }
+
+  function levelToCategory(level) {
+    const l = clampLevel(level);
+    if (l <= 4)  return '입문';
+    if (l <= 8)  return '초급';
+    if (l <= 12) return '중급';
+    if (l <= 16) return '고급';
+    return '마스터';
+  }
+
+  function getLevelConfig(level) {
+    const l = clampLevel(level);
+    return {
+      level:     l,
+      skill:       LEVEL_SKILLS[l - 1],
+      depth:       LEVEL_DEPTHS[l - 1],
+      mistakeRate: LEVEL_MISTAKE[l - 1],
+      topN:        LEVEL_TOPN[l - 1],
+      thinkTime: 400 + l * 40,
+      category:  levelToCategory(l),
+    };
+  }
+
+  // 게임 상태 → 레벨. 구버전 저장(difficulty 이름만 있음)은 해당 단계의 기본 레벨로.
+  function resolveLevel(state, difficulty) {
+    if (state && state.level) return clampLevel(state.level);
+    const name = difficulty || (state && state.difficulty);
+    return CATEGORY_DEFAULT_LEVEL[name] || CATEGORY_DEFAULT_LEVEL['중급'];
+  }
+
   const CHECKMATE_SCORE   = 200000;
   const MAX_SEARCH_MS     = 8000;
   const OPENING_MOVE_LIMIT = 6; // state.fullMoveNumber가 이 값 이하이면 오프닝 구간으로 간주
@@ -169,7 +220,63 @@
 
   // ── 공개 API ──────────────────────────────────────────────
 
-  function getBestMove(state, difficulty) {
+  // 상대 AI 착수: Stockfish(레벨별 Skill Level/깊이)를 쓰고,
+  // 엔진을 못 쓰거나 실패하면 내장 엔진(레벨의 5단계 설정)으로 둔다.
+  const OPPONENT_WAIT_MS = 4000;   // 엔진 로딩을 기다리는 최대 시간
+
+  async function getBestMove(state, difficulty) {
+    const lv = getLevelConfig(resolveLevel(state, difficulty));
+    const sf = window.ChessStockfish;
+    if (sf) {
+      const startTime = Date.now();
+      try {
+        const ready = sf.isOpponentReady() || await Promise.race([
+          sf.whenOpponentReady(),
+          new Promise(r => setTimeout(() => r(false), OPPONENT_WAIT_MS)),
+        ]);
+        if (ready) {
+          const move = await getStockfishMove(state, lv);
+          if (move) {
+            const wait = lv.thinkTime - (Date.now() - startTime);
+            if (wait > 0) await new Promise(r => setTimeout(r, wait));
+            return move;
+          }
+        }
+      } catch (err) {
+        console.warn('[AI] Stockfish 착수 실패 — 내장 엔진 사용:', err);
+      }
+    }
+    return getInternalBestMove(state, lv.category);
+  }
+
+  // 실수 주입이 없는 높은 레벨(Lv14+)의 오프닝 구간: MultiPV 4로 후보를 받아
+  //   기존 epsilon-window 가중 랜덤 선택(다양화) — 레벨 깊이 그대로
+  // 그 외: 레벨의 Skill Level·깊이(+실수 주입)로 고른 수
+  //   (낮은 레벨은 Skill Level 무작위성과 실수 주입만으로 오프닝이 충분히 다양하다)
+  async function getStockfishMove(state, lv) {
+    const sf = window.ChessStockfish;
+    if (lv.mistakeRate === 0 && isOpeningPhase(state)) {
+      const config = DIFFICULTY_CONFIG[lv.category];
+      const res = await sf.searchOpponent(state, { skill: 20, depth: lv.depth, multipv: 4 });
+      if (res.ranked.length > 0) {
+        // ranked는 MultiPV 순서(둘 차례 기준 최선수가 먼저) — selectOpeningMove 전제와 같음
+        return selectOpeningMove(res.ranked, config);
+      }
+      return res.move;
+    }
+    if (lv.mistakeRate > 0) {
+      // 후보 N개를 받아 두고, mistakeRate 확률로 그중 무작위 수 / 아니면 Skill Level이 고른 수
+      const res = await sf.searchOpponent(state, { skill: lv.skill, depth: lv.depth, multipv: lv.topN });
+      if (res.ranked.length > 1 && Math.random() < lv.mistakeRate) {
+        return res.ranked[Math.floor(Math.random() * res.ranked.length)].move;
+      }
+      return res.move;
+    }
+    const res = await sf.searchOpponent(state, { skill: lv.skill, depth: lv.depth });
+    return res.move;
+  }
+
+  function getInternalBestMove(state, difficulty) {
     const config = DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG['중급'];
     return new Promise((resolve, reject) => {
       setTimeout(() => {
@@ -245,7 +352,16 @@
   // ─── 전역 노출 ───────────────────────────────────────────
   window.ChessAI = {
     DIFFICULTY_CONFIG,
+    LEVEL_MIN,
+    LEVEL_MAX,
+    CATEGORY_DEFAULT_LEVEL,
+    clampLevel,
+    levelToCategory,
+    getLevelConfig,
+    resolveLevel,
     getBestMove,
+    getInternalBestMove,
+    getStockfishMove,   // 실측(난이도 보정)용 — 생각 시간 대기 없이 실제 착수 로직 그대로
     getHintMove,
     analyzePosition,
     rankMovesSync,   // 분석용 (수 품질 판정) — 동기 실행
