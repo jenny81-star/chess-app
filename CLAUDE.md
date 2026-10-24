@@ -14,7 +14,9 @@
 - **빌드 도구**: 없음 (index.html 직접 실행)
 - **배포**: GitHub → Vercel 자동배포
 - **저장**: localStorage (게임 저장/불러오기)
-- **외부 라이브러리**: 없음 (모든 기능 직접 구현)
+- **외부 라이브러리**: Stockfish.js 18 lite-single (WASM, GPLv3) — 힌트·수 품질 분석 전용. 상대 AI는 직접 구현한 ai.js 유지
+  - 파일: `assets/stockfish/` (라이선스: `assets/stockfish/Copying.txt`), 브리지: `src/engine/stockfish.js`
+  - 워커를 못 띄우는 환경(file:// 등)에서는 내장 엔진으로 자동 대체
 
 ## 프로젝트 구조
 ```

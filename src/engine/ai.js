@@ -192,7 +192,21 @@
     });
   }
 
-  function getHintMove(state) {
+  // Stockfish가 준비돼 있으면 Stockfish 최선수, 아니면(또는 실패 시) 내장 엔진 depth 2
+  async function getHintMove(state) {
+    const sf = window.ChessStockfish;
+    if (sf && sf.isReady()) {
+      try {
+        const move = await sf.getBestMove(state);
+        if (move) return move;
+      } catch (err) {
+        console.warn('[Hint] Stockfish 실패 — 내장 엔진 사용:', err);
+      }
+    }
+    return getInternalHintMove(state);
+  }
+
+  function getInternalHintMove(state) {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         try {

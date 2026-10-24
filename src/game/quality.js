@@ -4,7 +4,8 @@
  * 의존(호출 시점): window.ChessBoard, window.ChessAI, window.ChessGame,
  *                 window.ChessRenderer, window.ChessReview
  *
- * 판정 기준 (그 수를 두기 직전 포지션을 depth 3으로 분석):
+ * 판정 기준 (그 수를 두기 직전 포지션을 분석 — Stockfish가 준비돼 있으면
+ *            Stockfish depth 12, 아니면 내장 엔진 depth 3):
  *   cpLoss = 최선수 점수 - 실제 둔 수 점수 (둔 쪽 관점, centipawn)
  *   ??  cpLoss >= 300         (심각한 실수)
  *   ?   cpLoss >= 120         (실수)
@@ -26,7 +27,8 @@
   const root = typeof window !== 'undefined' ? window : globalThis;
 
   // ── 판정 상수 ─────────────────────────────────────────────
-  const ANALYSIS_DEPTH   = 3;    // 난이도와 무관하게 고정
+  const ANALYSIS_DEPTH   = 3;    // 내장 엔진 분석 깊이 (난이도와 무관하게 고정)
+  const SF_DEPTH         = 12;   // Stockfish 분석 깊이
   const BLUNDER_CP       = 300;  // ??
   const MISTAKE_CP       = 120;  // ?
   const BRILLIANT_GAP_CP = 400;  // !!
@@ -100,6 +102,24 @@
     return judgeQuality(ranked, entryToMove(history[index]), before.turn);
   }
 
+  // Stockfish 비동기 분석 → 품질 기호
+  async function analyzeMoveAtStockfish(startState, history, index) {
+    const before = positionBefore(startState, history, index);
+    const played = entryToMove(history[index]);
+    const ranked = await root.ChessStockfish.rankForQuality(before, played, SF_DEPTH);
+    return judgeQuality(ranked, played, before.turn);
+  }
+
+  // index수까지의 기보 서명 — 비동기 분석 중 무르기/새 게임으로 기보가 바뀌었는지 확인용
+  function historySignature(history, index) {
+    let sig = '';
+    for (let i = 0; i <= index; i++) {
+      const h = history[i];
+      sig += h.from.join('') + h.to.join('') + (h.promotion || '') + ';';
+    }
+    return sig;
+  }
+
   // ── 백그라운드 분석 큐 ────────────────────────────────────
   // 항상 "현재 게임 상태"에서 quality가 없는 첫 엔트리를 찾아 한 수씩 처리한다.
   // (엔트리 참조를 캡처하지 않으므로 새 게임/무르기/불러오기로 history가
@@ -128,9 +148,11 @@
     if (_timer !== null) { clearTimeout(_timer); _timer = null; }
   }
 
-  function processNext() {
+  let _running = false;  // Stockfish 분석이 진행 중이면 true (중복 실행 방지)
+
+  async function processNext() {
     _timer = null;
-    if (_busy) return;
+    if (_busy || _running) return;
     if (!root.ChessGame) return;
 
     const game = root.ChessGame.getState();
@@ -146,9 +168,40 @@
     }
     if (idx === -1) return;  // 전부 분석됨 — 체인 종료
 
+    const startState = root.ChessGame.getStartState();
+    const sf = root.ChessStockfish;
     let q = '';
+
+    if (sf) {
+      // 엔진 로딩 중이면 기다렸다가 Stockfish로 분석 (실패/불가면 내장 엔진)
+      _running = true;
+      let useSf = false;
+      try { useSf = await sf.whenReady(); } catch (e) { useSf = false; }
+      if (useSf) {
+        const sig = historySignature(history, idx);
+        try {
+          q = await analyzeMoveAtStockfish(startState, history, idx);
+        } catch (err) {
+          console.error('[Quality] Stockfish analyze error at move ' + idx + ':', err);
+          q = null;
+        }
+        _running = false;
+        // 분석하는 동안 수가 더 두어지면 history가 복제되므로 최신 상태에 기록한다.
+        // 무르기/새 게임 등으로 그 수까지의 기보가 달라졌으면 결과를 버린다.
+        // (오류면 ''로 기록해 같은 수를 무한 재시도하지 않게 한다)
+        const now = root.ChessGame.getState();
+        if (now && now.history[idx] && historySignature(now.history, idx) === sig) {
+          now.history[idx].quality = q === null ? '' : q;
+          refreshUI();
+        }
+        if (!_busy) _timer = setTimeout(processNext, 0);
+        return;
+      }
+      _running = false;
+    }
+
     try {
-      q = analyzeMoveAt(root.ChessGame.getStartState(), history, idx);
+      q = analyzeMoveAt(startState, history, idx);
     } catch (err) {
       console.error('[Quality] analyze error at move ' + idx + ':', err);
     }
